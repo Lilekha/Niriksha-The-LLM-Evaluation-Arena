@@ -70,3 +70,11 @@ def test_core_imports_no_providers_scorers_or_network_libraries():
         package = ".".join(path.relative_to(CORE.parents[1]).with_suffix("").parts[:-1])
         found = violations(imported_modules(path.read_text(encoding="utf-8"), package))
         assert not found, f"{path.name} imports forbidden modules: {sorted(found)}"
+
+
+def test_fake_provider_imports_only_core_and_stdlib():
+    path = CORE.parent / "providers" / "fake.py"
+    modules = imported_modules(path.read_text(encoding="utf-8"), "niriksha.providers")
+    external = {m.split(".")[0] for m in modules if m} - {"niriksha"}
+    assert external <= {"collections"}, f"unexpected imports: {sorted(external)}"
+    assert not violations(modules - {"niriksha.providers"}), "fake provider uses network or scorers"

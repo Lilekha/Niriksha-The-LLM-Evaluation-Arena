@@ -8,7 +8,7 @@ A model-agnostic platform for evaluating, benchmarking, and observing large lang
 
 **Pre-alpha. No real-model evaluation has been implemented yet.**
 
-Today the repository contains the project foundations (M0: documentation and tooling configuration) and the first part of M1 (M1.1): the generation request and result schemas, the failure model and the provider protocol in `niriksha.core`, with their tests and [ADR 0002](docs/adr/0002-provider-contract.md). There is no runner, evaluation engine, provider adapter (not even a fake one), scorer, dataset or benchmark result. Nothing here has been run against any model, and real evaluations are not possible yet.
+Today the repository contains the project foundations (M0: documentation and tooling configuration) and the first two parts of M1: the generation request and result schemas, the failure model and the provider protocol in `niriksha.core` (M1.1, with [ADR 0002](docs/adr/0002-provider-contract.md)), plus a deterministic fake provider and a minimal sequential runner that times each call (M1.2), all tested offline. The fake provider returns scripted text, not model output. There is no dataset loader, storage, run manifest, retry logic, scorer, real provider adapter or benchmark result. Nothing here has been run against any real model, and real evaluations are not possible yet.
 
 ## The problem
 
@@ -38,7 +38,7 @@ An independent evaluation core (runner, provider protocol, storage, manifests, s
 | Milestone | Scope | Status |
 |---|---|---|
 | M0 | Repository foundations and documentation (no evaluation code) | complete |
-| M1 | Schemas, dataset loader, fake provider, runner, store, manifest, resume | in progress (schemas and provider contract done; runner, evaluation engine and real providers pending) |
+| M1 | Schemas, dataset loader, fake provider, runner, store, manifest, resume | in progress (schemas, provider contract, fake provider and minimal runner done; dataset loader, store, manifest, resume and real providers pending) |
 | M2 | Deterministic scorers, aggregation with confidence intervals | planned |
 | M3 | OpenAI-compatible adapter (tested locally first), then opt-in real and local-model runs | planned |
 | M4 | English dataset v0.1, then Hindi and Kannada cases | planned |
