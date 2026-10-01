@@ -1,0 +1,3 @@
+{"id":"ex-en-001","split":"dev","language":"en","script":"Latn","origin":"original","license":"MIT","text":"Asha is 30 years old.","expected":{"name":"Asha","age":30}}
+{"id":"ex-en-002","split":"dev","language":"en","script":"Latn","origin":"original","license":"MIT","text":"Ravi, aged 25, lives in Pune.","expected":{"name":"Ravi","age":25}}
+{"id":"ex-hi-001","split":"test","language":"hi","script":"Deva","origin":"original","license":"MIT","text":"आशा 30 साल की है।","expected":{"name":"आशा","age":30}}

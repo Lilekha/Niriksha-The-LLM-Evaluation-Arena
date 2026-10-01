@@ -78,3 +78,17 @@ def test_fake_provider_imports_only_core_and_stdlib():
     external = {m.split(".")[0] for m in modules if m} - {"niriksha"}
     assert external <= {"collections"}, f"unexpected imports: {sorted(external)}"
     assert not violations(modules - {"niriksha.providers"}), "fake provider uses network or scorers"
+
+
+def test_boundary_scan_covers_the_dataset_and_run_modules():
+    scanned = {path.stem for path in CORE.rglob("*.py")}
+    expected = {
+        "generation",
+        "provider",
+        "runner",
+        "dataset",
+        "provenance",
+        "runstore",
+        "execution",
+    }
+    assert expected <= scanned

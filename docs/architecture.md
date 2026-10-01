@@ -1,13 +1,13 @@
 # Architecture
 
-**Mostly planned design.** M0 (repository foundations) is complete. M1.1 (generation schemas and provider contract) and M1.2 (a deterministic fake provider and a minimal sequential runner) are implemented, described under "Provider contract" and "Runner and fake provider" below. Storage, manifests, dataset loading, retries, scorers, the evaluation engine and all real provider adapters are not implemented yet, and `scorers` is still an empty package.
+**Mostly planned design.** M0 (repository foundations) is complete. M1.1 (generation schemas and provider contract), M1.2 (a deterministic fake provider and a minimal sequential runner) and M1.3 (local dataset loading and hashing, provenance, run persistence and resume) are implemented, described under "Provider contract", "Runner and fake provider" and "Datasets and runs" below. Everything runs offline against the fake provider. Scorers, any CLI or config-file loading, retries, real provider adapters and the benchmark dataset are not implemented yet, and `scorers` is still an empty package.
 
 ## Components
 
-- **Core engine** (`niriksha.core`): runner, provider protocol (request and result types), storage, run manifests. Never imports a concrete provider.
+- **Core engine** (`niriksha.core`): runner, provider protocol (request and result types), dataset loading and hashing, run storage and manifests. Never imports a concrete provider.
 - **Scorers** (`niriksha.scorers`): pure functions over stored outputs. Each carries a version.
 - **Provider adapters** (`niriksha.providers`): implement the provider protocol. The first is a deterministic fake provider (implemented in M1.2). Real providers (an OpenAI-compatible HTTP adapter, for cloud and local runtimes) come later and are opt-in.
-- **Data and configuration**: versioned datasets (immutable cases, content-hash version) and provider/run profiles as data files in `datasets/` and `configs/`. Profiles hold environment variable names, never secret values.
+- **Data and configuration**: versioned datasets (immutable cases, content-hash identity; loading implemented in M1.3) and provider/run profiles as data files in `datasets/` and `configs/` (profiles and config loading are not implemented; run settings are a Python `RunConfig` for now). Profiles will hold environment variable names, never secret values.
 - **Outputs**: raw results, per-attempt records, run manifest, scores, and reports.
 
 ## Data flow
@@ -61,3 +61,22 @@ Implemented: `niriksha.core.runner` (`run_requests`, `ExecutionRecord`, `Provide
 - Any other exception from a provider propagates unchanged. Expected provider failures arrive as `GenerationFailure` values and are kept in the records.
 - Nothing is persisted yet, so an exception partway through a run discards the records collected so far. Storage, manifests and resume are M1.3.
 - `FakeProvider(script=None, *, name="fake", returned_model="fake-model-v0")` echoes the last user message, or replays a script (`str` for output text, a `FailureKind` for a failure) in call order. Running past the end of the script raises. It records every request in `calls`, never reports usage, and marks results with `provider_metadata={"fake": True}`. It is a test double, not an inference service.
+
+## Datasets and runs (implemented in M1.3)
+
+Implemented: `niriksha.core.dataset`, `provenance`, `runstore` and `execution`. Offline only: no network, no real provider, no scoring, no CLI. The benchmark dataset itself does not exist yet; the datasets in `tests/fixtures/` are synthetic test data.
+
+**Dataset directory** (local files only): `dataset.json` (metadata and the pinned `content_sha256`) and `cases.jsonl` (one case per line, file order is dataset order). Tasks are `short_answer_qa` and `json_extraction`. Loading is strict and rejects malformed or non-NFC input with file, line and field. The hash covers the parsed cases, task, output schema and hash/schema versions, and ignores formatting and descriptive metadata. The loader recomputes it and refuses a mismatch, so changing a case means bumping `version`, updating the pin and recording the change in the dataset card. Exact payload and rules: [ADR 0003](adr/0003-dataset-identity-and-run-persistence.md).
+
+**Run directory** (`runs/<run_id>/`, gitignored):
+
+```
+manifest.json   written once, never modified: dataset identity, selection, prompt, provider, model,
+                parameters, software versions, git commit (null when unknown)
+results.jsonl   append-only: request_id, request hash, recorded_at, and the runner's ExecutionRecord
+```
+
+- `execute_run` builds and validates every request first, claims the run directory exclusively (an existing run is never overwritten), writes the manifest, then calls the provider once per case through `run_one` and appends each result, flushed and fsynced.
+- Each result is revalidated at the persistence boundary before it is written, which catches data mutated after construction. An optional guard refuses results, and the manifest, containing caller-supplied secret values; it is a backstop, not a secret detector. A failed append is truncated away (best effort) and an append onto an incomplete final line is refused, so a torn tail is never merged into a corrupt line.
+- `resume_run` refuses unless the dataset, selection, prompt, provider, model, parameters and software versions match the manifest. It runs only the selected cases that have no result, never retries recorded failures, truncates an unterminated final line, and treats other corruption, duplicates, unknown IDs request-hash mismatches, and stored results from a different provider or model as errors.
+- Known limits: a call in flight when the process died can be issued again on resume (a duplicate billable call with a real provider); one writer at a time, no locking; directory-entry durability varies by platform. The manifest is a provenance record, not a guarantee of reproducibility.

@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "name": "tiny-extraction",
+  "version": "0.1.0",
+  "task": "json_extraction",
+  "description": "Synthetic test fixture for the loader and hashing tests. Not a benchmark.",
+  "content_sha256": "a5939377e14a4f65399cab44b03f91210a009519ac0f0cbe84b10465bd4fe5df",
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "age": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "name",
+      "age"
+    ]
+  }
+}

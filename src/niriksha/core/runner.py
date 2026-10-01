@@ -59,6 +59,24 @@ def _check_contract(provider: Provider, request: GenerationRequest, result: obje
             )
 
 
+def run_one(
+    provider: Provider,
+    request: GenerationRequest,
+    *,
+    clock: Callable[[], float] = time.perf_counter,
+) -> ExecutionRecord:
+    """Make exactly one provider call for ``request`` and time it with ``clock``.
+
+    A result whose request_id, requested_model or provider name does not match raises
+    ``ProviderContractViolation``. Any other exception from the provider propagates unchanged.
+    """
+    start = clock()
+    result = provider.generate(request)
+    elapsed = clock() - start
+    _check_contract(provider, request, result)
+    return ExecutionRecord(result=result, elapsed_s=elapsed)
+
+
 def run_requests(
     provider: Provider,
     requests: Iterable[GenerationRequest],
@@ -67,17 +85,9 @@ def run_requests(
 ) -> list[ExecutionRecord]:
     """Call ``provider.generate`` exactly once per request, sequentially, in input order.
 
-    Failures come back as records holding a ``GenerationFailure``; they are not retried. A result
-    whose request_id, requested_model or provider name does not match raises
-    ``ProviderContractViolation``. Any other exception from the provider propagates unchanged.
+    Failures come back as records holding a ``GenerationFailure``; they are not retried.
+    Contract violations and provider exceptions behave as in ``run_one``.
     """
     # Materialise first: an invalid item raises before any provider call is made.
     queued = list(requests)
-    records: list[ExecutionRecord] = []
-    for request in queued:
-        start = clock()
-        result = provider.generate(request)
-        elapsed = clock() - start
-        _check_contract(provider, request, result)
-        records.append(ExecutionRecord(result=result, elapsed_s=elapsed))
-    return records
+    return [run_one(provider, request, clock=clock) for request in queued]

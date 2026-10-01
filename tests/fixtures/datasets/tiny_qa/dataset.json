@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "name": "tiny-qa",
+  "version": "0.1.0",
+  "task": "short_answer_qa",
+  "description": "Synthetic test fixture for the loader and hashing tests. Not a benchmark.",
+  "content_sha256": "e6486282fd5d6089bea7a5f260c42e5f7aa15226a34f56986cfccc8fb8c782e4"
+}

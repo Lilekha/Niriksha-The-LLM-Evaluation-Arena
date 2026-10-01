@@ -13,7 +13,7 @@ from niriksha.core.generation import (
     GenerationSuccess,
     Message,
 )
-from niriksha.core.runner import ExecutionRecord, ProviderContractViolation, run_requests
+from niriksha.core.runner import ExecutionRecord, ProviderContractViolation, run_one, run_requests
 from niriksha.providers.fake import FakeProvider
 
 
@@ -232,3 +232,17 @@ def test_execution_record_is_frozen_and_closed():
         record.elapsed_s = 1.0
     with pytest.raises(ValidationError):
         ExecutionRecord(result=result, elapsed_s=0.0, cost=0)
+
+
+def test_run_one_matches_a_single_item_run_requests():
+    one = run_one(FakeProvider(["x"]), request("r1"), clock=FakeClock())
+    [many] = run_requests(FakeProvider(["x"]), [request("r1")], clock=FakeClock())
+    assert one == many
+
+
+def test_run_one_makes_one_call_and_checks_the_contract():
+    provider = FakeProvider([FailureKind.TIMEOUT, "unused"])
+    record = run_one(provider, request("r1"))
+    assert isinstance(record.result, GenerationFailure) and len(provider.calls) == 1
+    with pytest.raises(ProviderContractViolation, match="request_id"):
+        run_one(Tampering(request_id="other"), request("r1"))

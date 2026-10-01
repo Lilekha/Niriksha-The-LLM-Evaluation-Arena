@@ -1,0 +1,5 @@
+{"id":"qa-en-001","split":"dev","language":"en","script":"Latn","origin":"original","license":"MIT","question":"What is the capital of France?","answers":["Paris"]}
+{"id":"qa-en-002","split":"dev","language":"en","script":"Latn","origin":"original","license":"MIT","question":"How many days are in a leap year?","answers":["366"]}
+{"id":"qa-hi-001","split":"test","language":"hi","script":"Deva","origin":"original","license":"MIT","question":"भारत की राजधानी क्या है?","answers":["नई दिल्ली","दिल्ली"]}
+{"id":"qa-kn-001","split":"holdout","language":"kn","script":"Knda","origin":"original","license":"MIT","question":"ಕರ್ನಾಟಕದ ರಾಜಧಾನಿ ಯಾವುದು?","answers":["ಬೆಂಗಳೂರು"]}
+{"id":"qa-hi-002","split":"test","language":"hi","script":"Latn","code_mixed":true,"origin":"original","license":"MIT","question":"India ki capital kaunsi hai?","answers":["New Delhi","Delhi"]}

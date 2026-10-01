@@ -17,6 +17,8 @@ The default install makes no network calls, and CI runs with no secrets and no e
 
 Tool: [detect-secrets](https://github.com/Yelp/detect-secrets), run through pre-commit and in CI. Chosen because it is a maintained pure-Python tool that installs with pip, avoiding a Go toolchain dependency on Windows. Gitleaks is a reasonable alternative. It is not configured here.
 
+Dataset content hashes (`"content_sha256"` in `dataset.json`) look like high-entropy secrets. The baseline therefore skips lines that consist solely of such a pin: the key, a 64-character lowercase hex value, an optional comma, and nothing else (the regex is anchored). Every other line is scanned normally, including a second secret placed beside a pin, a pin written in compact single-line JSON (keep `dataset.json` pretty-printed), a non-SHA-256 value, and any 64-hex value under a different key. `tests/test_secret_scan_config.py` checks both directions. The residual risk is a real 64-hex secret deliberately written as a pin value on its own line, which would not be flagged.
+
 One-time setup: `pip install -e ".[dev]"` then `pre-commit install`. The baseline is `.secrets.baseline`; review any new finding before adding it to the baseline.
 
 ### Verification procedure

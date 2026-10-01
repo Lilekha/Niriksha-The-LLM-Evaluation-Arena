@@ -124,3 +124,9 @@ node_modules/
 
 # Prompts folder
 prompts/
+
+# Agents
+CLAUDE.md
+
+# Run output (local)
+/runs/
