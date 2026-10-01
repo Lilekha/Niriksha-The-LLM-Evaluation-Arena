@@ -19,6 +19,8 @@ Tool: [detect-secrets](https://github.com/Yelp/detect-secrets), run through pre-
 
 Dataset content hashes (`"content_sha256"` in `dataset.json`) look like high-entropy secrets. The baseline therefore skips lines that consist solely of such a pin: the key, a 64-character lowercase hex value, an optional comma, and nothing else (the regex is anchored). Every other line is scanned normally, including a second secret placed beside a pin, a pin written in compact single-line JSON (keep `dataset.json` pretty-printed), a non-SHA-256 value, and any 64-hex value under a different key. `tests/test_secret_scan_config.py` checks both directions. The residual risk is a real 64-hex secret deliberately written as a pin value on its own line, which would not be flagged.
 
+**Windows: run the scan in UTF-8 mode.** detect-secrets opens files with the locale encoding. On a cp1252 system it silently skips any file it cannot decode (in this repository, files containing Hindi or Kannada text), so a local scan can pass while CI, which uses UTF-8, fails. Set `PYTHONUTF8=1` first (PowerShell: `$env:PYTHONUTF8 = "1"`; bash: `export PYTHONUTF8=1`) for `detect-secrets-hook` and `pre-commit`.
+
 One-time setup: `pip install -e ".[dev]"` then `pre-commit install`. The baseline is `.secrets.baseline`; review any new finding before adding it to the baseline.
 
 ### Verification procedure

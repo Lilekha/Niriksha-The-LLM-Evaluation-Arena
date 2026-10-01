@@ -12,15 +12,34 @@ from niriksha.core.dataset import (
     load_dataset,
 )
 
-# Golden values. If these change, dataset identity changed: that is a deliberate, versioned act
-# (bump HASH_VERSION, update fixtures and docs), never a silent side effect of a refactor.
-GOLDEN_QA = "e6486282fd5d6089bea7a5f260c42e5f7aa15226a34f56986cfccc8fb8c782e4"
-GOLDEN_EXTRACTION = "a5939377e14a4f65399cab44b03f91210a009519ac0f0cbe84b10465bd4fe5df"
+
+def independent_sha256(directory, task, output_schema):
+    """The documented hash, re-implemented with only the stdlib as a cross-check of the loader."""
+    lines = (directory / "cases.jsonl").read_text(encoding="utf-8").split("\n")
+    payload = {
+        "cases": [json.loads(line) for line in lines if line],
+        "hash_version": 1,
+        "output_schema": output_schema,
+        "schema_version": 1,
+        "task": task,
+    }
+    text = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
+    )
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def test_golden_hashes_of_the_fixtures():
-    assert load_dataset(FIXTURES / "tiny_qa").content_sha256 == GOLDEN_QA
-    assert load_dataset(FIXTURES / "tiny_extraction").content_sha256 == GOLDEN_EXTRACTION
+@pytest.mark.parametrize("name", ["tiny_qa", "tiny_extraction"])
+def test_fixture_hash_matches_the_committed_pin_and_an_independent_computation(name):
+    # The frozen reference is the pin committed in dataset.json: load_dataset refuses to load if
+    # the code's hash differs from it, so a change to the canonical form cannot pass silently. If it
+    # must change, that is a deliberate act (bump HASH_VERSION, regenerate the pins, update docs).
+    # The fixtures hold Hindi and Kannada text, so this also covers non-ASCII canonicalisation.
+    directory = FIXTURES / name
+    meta = json.loads((directory / "dataset.json").read_text(encoding="utf-8"))
+    loaded = load_dataset(directory)
+    expected = independent_sha256(directory, meta["task"], meta.get("output_schema"))
+    assert loaded.content_sha256 == meta["content_sha256"] == expected
 
 
 def test_canonical_json_form_is_exactly_as_documented():
