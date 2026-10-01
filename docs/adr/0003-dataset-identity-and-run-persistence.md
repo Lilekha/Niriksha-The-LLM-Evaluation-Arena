@@ -52,6 +52,24 @@ A comparison is only meaningful if the exact cases, prompt and settings are know
 - **Partial runs.** An exception partway through leaves a valid partial run on disk, which resume continues.
 - **Not validated yet:** `expected` against `output_schema` (needs `jsonschema`, arriving with the scorers), and `output_schema` is only checked to be a JSON object.
 
+## End-to-end behaviour (tested in M1.4)
+`tests/test_end_to_end.py` runs the public APIs with the fake provider only, in temporary directories:
+- A resumed run is identical to an uninterrupted one (byte-identical `results.jsonl`; manifests equal except `run_id`), with a crash before the first result, mid-run and at the last case.
+- The default paths (real clock, UTC time, real software info) execute and resume.
+- `audit_run` (test code in `tests/e2e_support.py`, not a library API) recomputes the dataset, selection, prompt and request hashes from disk and checks that a run directory holds exactly `manifest.json` and `results.jsonl`. The audit is itself tested against five kinds of tampering.
+- A child process killed with `os._exit`, with and without a torn final record, is resumed by the parent and matches an uninterrupted run. The child installs its own network guard, because `tests/conftest.py` only patches the pytest process.
+- Eight kinds of damaged manifest are rejected before any provider call, and the results file is not touched (a torn tail is not truncated).
+- A dataset edited after a run started is refused on load (pin mismatch); after re-pinning, resume is refused.
+- A contract violation stops the run, and later cases are never called, also when the run is resumed.
+- All seven failure kinds persist and read back, and none is retried. A `returned_model` that differs from the requested model is recorded, not rejected.
+
+## Limitations found by the M1.4 review (not fixed in M1.4)
+- **A resume leaves no trace.** The manifest is immutable and nothing records that a resume happened or that a torn record was dropped. Attempt-start markers are deferred.
+- **No tamper evidence.** Hashes detect drift between the dataset, prompt and configuration and a run, not a deliberate edit of `manifest.json` or `results.jsonl`.
+- **No consumer-facing completeness check.** A reader must compare the result count with `manifest.selection.case_count` itself; `audit_run` shows the checks. A proper run loader belongs with the scorers.
+- **The secret guard only covers values the caller passes.** Nothing supplies them yet.
+- **Request hashes depend on the request schema.** `request_sha256` hashes the whole request dump, null fields included, so adding a field to the request schema would change every request hash and make resume refuse older runs with a misleading message. This is deferred and should be decided before any run data matters.
+
 ## Consequences
 - Benchmark edits are visible and deliberate; the hash pin is the enforcement.
 - Runs are inspectable with any text tool, and re-scoring later needs no new inference calls.

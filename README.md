@@ -40,7 +40,7 @@ An independent evaluation core (runner, provider protocol, storage, manifests, s
 | Milestone | Scope | Status |
 |---|---|---|
 | M0 | Repository foundations and documentation (no evaluation code) | complete |
-| M1 | Schemas, dataset loader, fake provider, runner, store, manifest, resume | implemented offline with the fake provider only (M1.1 to M1.3); pending review |
+| M1 | Schemas, dataset loader, fake provider, runner, store, manifest, resume | implemented offline with the fake provider only (M1.1 to M1.3), integration-tested in M1.4; pending review |
 | M2 | Deterministic scorers, aggregation with confidence intervals | planned |
 | M3 | OpenAI-compatible adapter (tested locally first), then opt-in real and local-model runs | planned |
 | M4 | English dataset v0.1, then Hindi and Kannada cases | planned |

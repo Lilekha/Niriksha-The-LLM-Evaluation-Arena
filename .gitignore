@@ -20,6 +20,8 @@ credentials.json
 /venv/
 /env/
 /ENV/
+/.venv*/
+/venv*/
 
 # Python caches and compiled files
 
