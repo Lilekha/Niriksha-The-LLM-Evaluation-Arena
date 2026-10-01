@@ -1,0 +1,126 @@
+# ==========================================
+
+# Niriksha — The LLM Evaluation Arena
+
+# ==========================================
+
+# Secrets and environment variables
+
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+/secrets/
+credentials.json
+
+# Python virtual environments
+
+/.venv/
+/venv/
+/env/
+/ENV/
+
+# Python caches and compiled files
+
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Python packaging and build artifacts
+
+/build/
+/dist/
+/wheels/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Testing, coverage, and type checking
+
+.pytest_cache/
+.coverage
+.coverage.*
+/htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.pyright/
+.ruff_cache/
+
+# Jupyter Notebook
+
+.ipynb_checkpoints/
+
+# IDEs and editors
+
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# Operating system files
+
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs and temporary files
+
+*.log
+/logs/
+/tmp/
+/temp/
+
+# Local databases
+
+*.db
+*.sqlite
+*.sqlite3
+
+# Local model weights and downloaded datasets
+
+/models/
+/checkpoints/
+datasets/raw/
+data/raw/
+*.safetensors
+*.gguf
+*.pt
+*.pth
+*.onnx
+
+# Generated evaluation outputs and experiment artifacts
+
+# Keep benchmark definitions and curated test datasets in Git.
+
+/evaluation_outputs/
+/experiment_outputs/
+/artifacts/
+/mlruns/
+/wandb/
+/outputs/
+
+# Streamlit secrets
+
+.streamlit/secrets.toml
+
+# Frontend dependencies and build output
+
+node_modules/
+/dist/
+.astro/
+.next/
+/out/
+/coverage/
+
+# Local environment and tool files
+
+.python-version.local
+
+# Prompts folder
+prompts/
