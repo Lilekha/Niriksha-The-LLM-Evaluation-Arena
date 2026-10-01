@@ -1,3 +1,4 @@
+import hashlib
 import json
 import math
 import os
@@ -7,7 +8,13 @@ import pytest
 from pydantic import ValidationError
 
 import niriksha.core.runstore as runstore
-from niriksha.core.generation import FailureKind, GenerationFailure
+from niriksha.core.generation import (
+    FailureKind,
+    GenerationFailure,
+    GenerationParams,
+    GenerationRequest,
+    Message,
+)
 from niriksha.core.runstore import (
     CorruptRunError,
     PersistenceError,
@@ -550,3 +557,125 @@ def test_secret_guard_covers_the_manifest_and_nothing_is_created(tmp_path):
         create_run(tmp_path / "runs", make_manifest("run1"), secret_values=("short",))
     assert not (tmp_path / "runs").exists()
     assert create_run(tmp_path / "runs", make_manifest("run1"), secret_values=(GUARD,)).is_dir()
+
+
+# -- the selection, prompt and request hashes, pinned independently of the production helpers ----
+# The expected values come from the stdlib implementation below, written from the payloads
+# documented in ADR 0003 ("Hash definitions"), never from the code under test. The digests are
+# golden values: if the implementation and a payload were both changed, these tests would still
+# fail until the digest was changed deliberately (a hash change invalidates stored runs). Each
+# digest line carries a narrow per-line scanner allowlist, because a SHA-256 digest looks like a
+# high-entropy secret to detect-secrets.
+
+KANNADA_WORD = "ಉತ್ತರ"
+HINDI_WORD = "भारत"
+
+
+def independent_canonical(value) -> str:
+    return json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
+    )
+
+
+def independent_sha256(value) -> str:
+    return hashlib.sha256(independent_canonical(value).encode("utf-8")).hexdigest()
+
+
+GOLDEN = {
+    "ids-three": "05f7becd110a8af9c99ca7fc34915b314750b74d4670fade57e25dcaac734c00",  # pragma: allowlist secret  # noqa: E501
+    "ids-two": "a6b819ad4164f4fad4379c6093b54ef78da2481934dfc63e27d69f7679fdd863",  # pragma: allowlist secret  # noqa: E501
+    "prompt-plain": "47689fbe87d25659afa5c27d7e7e91acabd8bb5ba5513168343cc502a95270a3",  # pragma: allowlist secret  # noqa: E501
+    "prompt-system-unicode": "e7ea642344acf226e3fa4f9c0543033af79e5abf7b054b80189d27e38c302846",  # pragma: allowlist secret  # noqa: E501
+    "request-unset-params": "0519307d01aa1bcb827e18d149c39674088cb6e0fefd905b13b6245d9ea22a2e",  # pragma: allowlist secret  # noqa: E501
+    "request-all-params-unicode": "795d593767b9192a450d041c3b1f054c81dc2bf67c48ef904d5a51b3b3d0d6d5",  # pragma: allowlist secret  # noqa: E501
+}
+
+
+@pytest.mark.parametrize(
+    ("name", "ids", "canonical"),
+    [
+        ("ids-three", ["c00", "c01", "c02"], '["c00","c01","c02"]'),
+        ("ids-two", ["qa-en-001", "qa-hi-001"], '["qa-en-001","qa-hi-001"]'),
+    ],
+)
+def test_selection_hash_is_sha256_of_the_canonical_id_array_in_dataset_order(name, ids, canonical):
+    assert independent_canonical(ids) == canonical  # the exact serialisation, in dataset order
+    assert independent_sha256(ids) == GOLDEN[name]
+    assert ids_sha256(ids) == GOLDEN[name]
+    assert ids_sha256(ids[::-1]) != GOLDEN[name]  # order is part of the identity
+
+
+def test_prompt_hash_is_sha256_of_the_canonical_system_and_user_object():
+    plain = PromptTemplate(user="Answer: {input}")
+    payload = {"system": None, "user": "Answer: {input}"}
+    assert independent_canonical(payload) == '{"system":null,"user":"Answer: {input}"}'
+    assert independent_sha256(payload) == GOLDEN["prompt-plain"] == plain.sha256
+
+    user = 'Reply as {"answer": "' + KANNADA_WORD + '"} to: {input}'
+    payload = {"system": "Be brief.", "user": user}
+    canonical = independent_canonical(payload)
+    assert KANNADA_WORD in canonical and "\\u0c89" not in canonical  # raw UTF-8, never escapes
+    assert independent_sha256(payload) == GOLDEN["prompt-system-unicode"]
+    assert PromptTemplate(system="Be brief.", user=user).sha256 == GOLDEN["prompt-system-unicode"]
+
+
+def test_request_hash_is_sha256_of_the_full_request_dump_with_nulls_for_unset_params():
+    unset = GenerationRequest(
+        request_id="c1", model="m", messages=(Message(role="user", content="hi"),)
+    )
+    payload = {
+        "messages": [{"content": "hi", "role": "user"}],
+        "model": "m",
+        "params": {
+            "max_tokens": None,
+            "response_format": None,
+            "seed": None,
+            "stop": None,
+            "temperature": None,
+            "top_p": None,
+        },
+        "request_id": "c1",
+    }
+    assert independent_canonical(payload) == (
+        '{"messages":[{"content":"hi","role":"user"}],"model":"m","params":{"max_tokens":null,'
+        '"response_format":null,"seed":null,"stop":null,"temperature":null,"top_p":null},'
+        '"request_id":"c1"}'
+    )
+    assert independent_sha256(payload) == GOLDEN["request-unset-params"]
+    assert request_sha256(unset) == GOLDEN["request-unset-params"]
+
+    full = GenerationRequest(
+        request_id="qa-hi-001",
+        model="fake-model",
+        messages=(
+            Message(role="system", content="Be brief."),
+            Message(role="user", content="Answer: " + HINDI_WORD + "?"),
+        ),
+        params=GenerationParams(
+            temperature=0.0,
+            top_p=0.9,
+            max_tokens=64,
+            seed=7,
+            stop=("END", "।"),
+            response_format="json_object",
+        ),
+    )
+    payload = {
+        "messages": [
+            {"content": "Be brief.", "role": "system"},
+            {"content": "Answer: " + HINDI_WORD + "?", "role": "user"},
+        ],
+        "model": "fake-model",
+        "params": {
+            "max_tokens": 64,
+            "response_format": "json_object",
+            "seed": 7,
+            "stop": ["END", "।"],
+            "temperature": 0.0,
+            "top_p": 0.9,
+        },
+        "request_id": "qa-hi-001",
+    }
+    assert HINDI_WORD in independent_canonical(payload)  # raw UTF-8, never escapes
+    assert independent_sha256(payload) == GOLDEN["request-all-params-unicode"]
+    assert request_sha256(full) == GOLDEN["request-all-params-unicode"]

@@ -21,11 +21,14 @@ from ds_helpers import FIXTURES, qa, write_dataset
 from e2e_support import (
     CHILD_ENV_FLAG,
     CRASH_EXIT_CODE,
+    GUARD_MISSING_EXIT_CODE,
+    SKIP_GUARD_FLAG,
     Crash,
     CrashingProvider,
     ViolatingProvider,
     audit_run,
     make_config,
+    network_guard_is_active,
 )
 from niriksha.core.dataset import DatasetError, compute_content_sha256, load_dataset
 from niriksha.core.execution import execute_run, resume_run
@@ -414,3 +417,37 @@ def test_a_different_returned_model_is_recorded_not_rejected(tmp_path, ten_dir):
     assert {r.requested_model for r in results} == {"m"}
     assert {r.returned_model for r in results} == {"fake-snapshot-2"}
     audit_run(summary.run_dir, config, ten_dir)
+
+
+# -- the child process installs its own network guard before it evaluates anything ----------------
+# tests/conftest.py patches only the pytest process. The child's provider probes for the guard on
+# every call (with invalid arguments, so nothing is ever sent), from inside execute_run.
+
+
+def test_the_parent_process_guard_is_active_and_detected_by_the_probe():
+    assert network_guard_is_active()  # tests/conftest.py is untouched and still in force
+
+
+def test_child_installs_the_network_guard_before_evaluating(tmp_path):
+    runs = tmp_path / "runs"
+    child = run_child(
+        FIXTURES / "tiny_qa", runs, "guarded", crash_after=99, torn=False, splits="dev"
+    )
+    assert child.returncode == 0, child.stderr
+    # Both dev cases ran; the probe found the guard before each provider call.
+    assert [r.request_id for r in read_results(runs / "guarded").lines] == [
+        "qa-en-001",
+        "qa-en-002",
+    ]
+
+
+def test_the_probe_fails_a_child_that_has_no_guard(tmp_path, monkeypatch):
+    # Negative control: this is what a removed, or too late, block_network() would look like. The
+    # switch is honoured only by child_main and only inside the child process.
+    monkeypatch.setenv(SKIP_GUARD_FLAG, "1")
+    runs = tmp_path / "runs"
+    child = run_child(
+        FIXTURES / "tiny_qa", runs, "unguarded", crash_after=99, torn=False, splits="dev"
+    )
+    assert child.returncode == GUARD_MISSING_EXIT_CODE, child.stderr
+    assert read_results(runs / "unguarded").lines == ()  # it stopped at the first provider call

@@ -27,7 +27,9 @@ from niriksha.core.runstore import (
 from niriksha.providers.fake import FakeProvider
 
 CHILD_ENV_FLAG = "NIRIKSHA_E2E_CHILD"
+SKIP_GUARD_FLAG = "NIRIKSHA_E2E_SKIP_GUARD"  # test-only: lets a negative control omit the guard
 CRASH_EXIT_CODE = 137
+GUARD_MISSING_EXIT_CODE = 86  # the child found no network guard when it first called the provider
 TORN_FRAGMENT = b'{"request_id": "torn", "request_sha256": "ab'  # an incomplete JSONL record
 
 
@@ -52,15 +54,30 @@ class CrashingProvider(FakeProvider):
     ``os._exit``, which models a killed process (no cleanup, no exception handling), after
     optionally appending an incomplete record to ``torn_path``. Hard exit is only honoured inside
     the child process started by the tests, so a mistake cannot terminate pytest itself.
+
+    With ``require_network_guard=True`` (child only) every call first checks that the network guard
+    is installed and exits with ``GUARD_MISSING_EXIT_CODE`` if it is not. Because the check runs
+    inside ``execute_run``, it proves the guard was installed before the evaluation began.
     """
 
-    def __init__(self, *args, crash_after=None, torn_path=None, hard_exit=False, **kwargs):
+    def __init__(
+        self,
+        *args,
+        crash_after=None,
+        torn_path=None,
+        hard_exit=False,
+        require_network_guard=False,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
-        if hard_exit and os.environ.get(CHILD_ENV_FLAG) != "1":
-            raise RuntimeError("hard_exit is only allowed inside the end-to-end child process")
+        if (hard_exit or require_network_guard) and os.environ.get(CHILD_ENV_FLAG) != "1":
+            raise RuntimeError("this option is only allowed inside the end-to-end child process")
         self.crash_after, self.torn_path, self.hard_exit = crash_after, torn_path, hard_exit
+        self.require_network_guard = require_network_guard
 
     def generate(self, request):
+        if self.require_network_guard and not network_guard_is_active():
+            os._exit(GUARD_MISSING_EXIT_CODE)
         if self.crash_after is not None and len(self.calls) == self.crash_after:
             if self.hard_exit:
                 if self.torn_path is not None:
@@ -103,17 +120,48 @@ def block_network() -> None:
     socket.getaddrinfo = blocked
 
 
+def network_guard_is_active() -> bool:
+    """True if ``block_network`` (or the conftest guard) is installed in this process.
+
+    The probes use invalid arguments, so without the guard they fail locally on argument
+    validation (``TypeError``, ``gaierror``) and nothing is sent anywhere; with it they raise the
+    guard's ``RuntimeError`` first.
+    """
+
+    def intercepted(call) -> bool:
+        try:
+            call()
+        except RuntimeError as error:
+            return "network access is not allowed" in str(error)
+        except Exception:
+            return False  # failed for an ordinary reason: the guard did not intercept the call
+        return False
+
+    def connect_to_a_malformed_address():
+        with socket.socket() as sock:
+            sock.connect("not-an-address")
+
+    return intercepted(connect_to_a_malformed_address) and intercepted(
+        lambda: socket.getaddrinfo(None, None)
+    )
+
+
 def child_main(argv: list[str]) -> int:
     """Run ``execute_run`` through the public API with the real clock, time and software info,
     crashing hard after ``crash_after`` results. Arguments: dataset_dir runs_dir run_id
-    crash_after torn(0|1) splits(comma separated)."""
-    block_network()
+    crash_after torn(0|1) splits(comma separated).
+
+    The network guard is installed first, before anything is loaded or run. ``SKIP_GUARD_FLAG``
+    omits it, solely so a negative control can show that the provider's probe notices."""
+    if os.environ.get(SKIP_GUARD_FLAG) != "1":
+        block_network()
     dataset_dir, runs_dir, run_id, crash_after, torn, splits = argv
     results_path = Path(runs_dir) / run_id / RESULTS_FILE
     provider = CrashingProvider(
         crash_after=int(crash_after),
         torn_path=results_path if torn == "1" else None,
         hard_exit=True,
+        require_network_guard=True,
     )
     execute_run(
         make_config(run_id, splits.split(",")), load_dataset(dataset_dir), provider, runs_dir
