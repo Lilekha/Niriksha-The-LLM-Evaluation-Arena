@@ -1,6 +1,6 @@
 # ADR 0004: Run integrity and the scoring contract
 
-Status: accepted. Date: 2026-10-02.
+Status: accepted. Date: 2026-10-02. Item 9 and the matching limitations are superseded in part by [ADR 0005](0005-score-artifacts-and-reports.md): since M2.2 scores are persisted as separate artifacts and aggregated per artifact.
 
 Covers M2.1: an offline run reader, a score-record contract and three deterministic scorers. Everything is offline and read-only. There is still no real provider, score persistence, aggregation, JSON Schema validation or benchmark dataset.
 
@@ -38,9 +38,9 @@ Generation and scoring are separate: raw outputs are stored first, so scoring ca
 
 ## Limitations
 - The metrics measure what their documents define (string identity after normalisation, parse validity, per-field value identity), not semantic correctness. They have not been validated against human labels.
-- No aggregation, confidence intervals or comparison across runs (M2.2 and later); JSON Schema validity is deferred to M2.2.
+- Per-artifact aggregation arrived in M2.2 (ADR 0005). Confidence intervals and comparison across runs are later milestones with a defined protocol; JSON Schema validity is M2.3.
 - Extra fields in an extraction answer are reported but do not lower `field_exact_match`.
-- Scores are not persisted, so they are recomputed on demand.
+- In M2.1 scores were not persisted; since M2.2 they are (ADR 0005).
 - `LoadedRun` is a plain frozen dataclass: constructing one by hand bypasses the checks. Build it only through `load_run`.
 - The request-hash dependence on the request schema noted in ADR 0003 still applies to the reader: a schema change makes older runs fail request-hash verification.
 

@@ -108,3 +108,12 @@ def test_scorers_import_no_providers_or_network_libraries():
         found = imported_modules(path.read_text(encoding="utf-8"), "niriksha.scorers")
         bad = {m for m in found for name in forbidden if m == name or m.startswith(name + ".")}
         assert not bad, f"{path.name} imports forbidden modules: {sorted(bad)}"
+
+
+def test_boundary_scan_covers_the_score_store_and_report_modules():
+    scanned = {path.stem for path in CORE.rglob("*.py")}
+    assert {"scorestore", "report"} <= scanned  # core may not import scorers, providers or network
+
+
+def test_the_scoring_workflow_module_is_scanned_for_providers_and_network_libraries():
+    assert "artifacts" in {path.stem for path in (CORE.parent / "scorers").glob("*.py")}

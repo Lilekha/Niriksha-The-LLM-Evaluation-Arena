@@ -132,3 +132,6 @@ CLAUDE.md
 
 # Run output (local)
 /runs/
+
+# Persisted score artifacts (local)
+/scores/
