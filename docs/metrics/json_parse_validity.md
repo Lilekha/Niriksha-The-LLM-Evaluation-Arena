@@ -36,7 +36,7 @@ Output record: `metric="json_parse_validity"`, `metric_version="0.1.0"`, `status
 - The model was asked to reply with JSON only. Output that wraps JSON in prose or a code fence is treated as not valid; no repair is attempted, because repair would hide a real failure of the model to follow the format.
 
 ## Limitations
-- A valid document of the wrong shape or with wrong values scores 1.0. Use `field_exact_match` for values; schema validity is deferred to M2.2.
+- A valid document of the wrong shape or with wrong values scores 1.0. Use `field_exact_match` for values; use `json_schema_validity` for shape.
 - Python's parser decides edge cases. Behaviour on integers beyond the digit limit and on extreme nesting follows the interpreter (its integer digit limit and recursion limit), not the JSON specification. The tests therefore check the real inputs only under the default limits and check the mapping to the named failure codes with injected errors under any limits.
 - A truncated generation is scored like any other output; `finish_reason` is not consulted.
 - Per-case value only; no aggregation yet.

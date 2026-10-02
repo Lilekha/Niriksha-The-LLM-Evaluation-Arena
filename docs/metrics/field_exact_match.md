@@ -4,7 +4,7 @@
 **Status:** implemented; unit and integration tested; not yet validated against human labels
 
 ## Purpose
-The fraction of the expected top-level fields that the stored output reproduces exactly, under strict, type-sensitive comparison. It measures value identity per field. It is **not** JSON Schema validation (deferred to M2.2) and does not measure semantic equivalence.
+The fraction of the expected top-level fields that the stored output reproduces exactly, under strict, type-sensitive comparison. It measures value identity per field. It is **not** JSON Schema validation (see `json_schema_validity`) and does not measure semantic equivalence.
 
 ## Applicable task
 `json_extraction` datasets. The expected data is the case's `expected` object.

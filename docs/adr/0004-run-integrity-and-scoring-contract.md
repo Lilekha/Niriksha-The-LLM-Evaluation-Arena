@@ -38,7 +38,7 @@ Generation and scoring are separate: raw outputs are stored first, so scoring ca
 
 ## Limitations
 - The metrics measure what their documents define (string identity after normalisation, parse validity, per-field value identity), not semantic correctness. They have not been validated against human labels.
-- Per-artifact aggregation arrived in M2.2 (ADR 0005). Confidence intervals and comparison across runs are later milestones with a defined protocol; JSON Schema validity is M2.3.
+- Per-artifact aggregation arrived in M2.2 (ADR 0005). Confidence intervals and comparison across runs are later milestones with a defined protocol; JSON Schema validity arrived in M2.3 (ADR 0006).
 - Extra fields in an extraction answer are reported but do not lower `field_exact_match`.
 - In M2.1 scores were not persisted; since M2.2 they are (ADR 0005).
 - `LoadedRun` is a plain frozen dataclass: constructing one by hand bypasses the checks. Build it only through `load_run`.

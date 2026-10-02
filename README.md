@@ -12,9 +12,11 @@ Today the repository contains the project foundations (M0), the generation schem
 
 M2.1 adds an offline run reader that verifies a stored run against its dataset, and three deterministic scorers (normalized exact match, JSON parse validity, field-level exact match; [ADR 0004](docs/adr/0004-run-integrity-and-scoring-contract.md)). They score stored outputs only, so they measure string and value identity as defined in [docs/metrics/](docs/metrics/), not semantic correctness.
 
+M2.3 adds a JSON Schema validity metric that scores outputs against the dataset's own `output_schema` (Draft 2020-12, local references only, `format` not checked; [ADR 0006](docs/adr/0006-json-schema-validity-scoring.md), [definition](docs/metrics/json_schema_validity.md)). It adds the `jsonschema` dependency.
+
 M2.2 persists scores as separate, verifiable artifacts (one metric per run), aggregates them per artifact (mean over scored cases only; failed generations are counted as not scored and never as zero) and renders deterministic reports, all offline ([ADR 0005](docs/adr/0005-score-artifacts-and-reports.md), [usage guide](docs/scoring-guide.md)). Integrity hashes detect corruption and drift; they do not authenticate.
 
-There is still no CLI, config-file loading, real provider adapter, retry logic, JSON Schema validity metric, confidence interval, model comparison or benchmark dataset. Nothing here has been run against any real model, and real evaluations are not possible yet. A run's manifest records what was run; it does not make a run reproducible.
+There is still no CLI, config-file loading, real provider adapter, retry logic, confidence interval, model comparison or benchmark dataset. Nothing here has been run against any real model, and real evaluations are not possible yet. A run's manifest records what was run; it does not make a run reproducible.
 
 ## The problem
 
@@ -45,7 +47,7 @@ An independent evaluation core (runner, provider protocol, storage, manifests, s
 |---|---|---|
 | M0 | Repository foundations and documentation (no evaluation code) | complete |
 | M1 | Schemas, dataset loader, fake provider, runner, store, manifest, resume | implemented offline with the fake provider only (M1.1 to M1.3), integration-tested in M1.4; pending review |
-| M2 | Deterministic scorers, persisted scores and reports, JSON Schema validity, confidence intervals | in progress (M2.1 scorers and M2.2 score artifacts and reports done; M2.3 JSON Schema validity next; confidence intervals and comparison later) |
+| M2 | Deterministic scorers, persisted scores and reports, JSON Schema validity, confidence intervals | in progress (M2.1 scorers and M2.2 score artifacts and reports done; M2.3 JSON Schema validity implemented, pending review; confidence intervals and comparison later) |
 | M3 | OpenAI-compatible adapter (tested locally first), then opt-in real and local-model runs | planned |
 | M4 | English dataset v0.1, then Hindi and Kannada cases | planned |
 | M5 | Reports, paired comparisons, first honest write-up | planned |

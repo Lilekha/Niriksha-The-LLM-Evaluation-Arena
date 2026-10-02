@@ -31,11 +31,12 @@ from niriksha.core.scorestore import (
     write_artifact,
 )
 from niriksha.core.scoring import ScoreRecord
-from niriksha.scorers import exact_match, field_match, json_parse
+from niriksha.scorers import exact_match, field_match, json_parse, json_schema
 
 # The implementation of every (metric name, version) this build can score and verify.
 REGISTRY: dict[tuple[str, str], ModuleType] = {
-    (module.METRIC, module.VERSION): module for module in (exact_match, json_parse, field_match)
+    (module.METRIC, module.VERSION): module
+    for module in (exact_match, json_parse, field_match, json_schema)
 }
 
 
@@ -80,8 +81,12 @@ def score_records(run: LoadedRun, scorer: ModuleType) -> tuple[ScoreRecord, ...]
         raise ScoreArtifactError(
             f"metric {scorer.METRIC!r} applies to {scorer.TASK!r} runs, but this run is {task!r}"
         )
+    # A scorer that needs run-level data (the dataset schema) defines ``prepare(run)``; its result
+    # is passed to ``score_case``. It runs before scoring, so a defect raises before any write.
+    prepare = getattr(scorer, "prepare", None)
+    extra = () if prepare is None else (prepare(run),)
     return tuple(
-        scorer.score_case(case, line.request_id, line.execution.result)
+        scorer.score_case(case, line.request_id, line.execution.result, *extra)
         for case, line in zip(run.cases, run.results, strict=True)
     )
 
