@@ -75,6 +75,33 @@ Reports are built from the artifact alone: you can delete the run and the datase
 - `not_scored_by_reason` counts not-scored cases by reason, sorted by reason.
 - Per-case rows keep the artifact's order (the run's selection order).
 
+## Compare two runs
+
+```python
+from niriksha.core.compare import render_comparison_json, render_comparison_markdown
+from niriksha.scorers.comparison import RunInput, compare_runs
+
+baseline = RunInput("runs/run-a", "datasets/my-dataset", "scores")
+candidate = RunInput("runs/run-b", "datasets/my-dataset", "scores")
+comparison = compare_runs(baseline, candidate, "normalized_exact_match")
+print(render_comparison_markdown(comparison))
+open("comparison.json", "w", encoding="utf-8", newline="\n").write(
+    render_comparison_json(comparison)
+)
+```
+
+Both runs must already be scored with that metric (`score_run_to_artifact`); comparing never creates or changes a file. Each side is loaded, its artifact is read and verified against its run and dataset, and a problem stops the comparison with the existing typed error prefixed `baseline:` or `candidate:`. Reports contain no paths and no timestamps, so the same inputs always give the same bytes. Nothing is saved automatically.
+
+What counts as comparable: the same metric name, version and task; the same dataset (name, version, task, schema version, content hash); the same selection (case count and case-ID hash); and two different runs. Otherwise `IncompatibleRunsError` lists the mismatching fields.
+
+What may differ: provider, requested model, prompt and generation parameters. The report records which do. If the prompt or any parameter differs it warns that a score difference cannot necessarily be attributed to the model.
+
+How to read it:
+- A difference is always `candidate - baseline`. Higher means a larger number; the report records the metric's declared direction but never names a winner and makes no significance claim.
+- A case that failed or was not scored has no value and is never counted as 0.0. Per case the outcome is one of `both_scored_candidate_higher`, `both_scored_baseline_higher`, `both_scored_equal`, `only_baseline_scored`, `only_candidate_scored` or `neither_scored`; "equal" means exactly equal.
+- Each run's mean uses its own scored cases, so the difference of the two means is given only if both runs scored the same cases (`same_scored_cases`); otherwise it is null with the reason `different_scored_cases`. The paired summary uses only the cases both scored and is shown first when the runs scored different cases. With no such case it is unavailable (`no_paired_scored_cases`).
+- One metric per comparison; there is no overall score across metrics.
+
 ## Artifact file format (version 1)
 One JSON document at `<scores_dir>/<run_id>--<metric>--<version>.json`:
 
@@ -94,10 +121,11 @@ There is no timestamp, so rewriting an artifact gives identical bytes.
 |---|---|
 | `RunIntegrityError` | The run (or its dataset) failed `load_run`. Raised unchanged. |
 | `ScoreArtifactError` | The artifact is missing, malformed, corrupt or of an unsupported version; the metric or version is unknown; the metric does not fit the run's task; the version cannot be verified; `scores_dir` is a regular file or cannot be created; or a directory occupies the artifact path. |
+| `IncompatibleRunsError` | (Comparison only.) The two runs cannot be compared; `.differences` names the mismatching fields. |
 | `ScoreArtifactMismatchError` | The artifact is well-formed but does not match the run, the dataset or the scorer (including a source run that cannot be verified). A subclass of `ScoreArtifactError`. |
 
 ## Known limitations
 - The metrics measure string or value identity under rules written down in `docs/metrics/`. They do not measure semantic correctness, and they are not validated against human labels. A mean is a summary of per-case values, not a statement of model quality.
 - The hashes detect accidental corruption and drift. They do not authenticate: anyone who can write the files can rewrite an artifact and its hashes consistently.
 - A process killed while writing can leave a truncated artifact; it is refused on reading and blocks its name until it is removed by hand.
-- There is no ranking, confidence interval, significance test or comparison across runs, and `json_schema_validity` does not check `format` (see its definition for the dialect and limits).
+- There is no ranking, confidence interval or significance test; two runs can be compared descriptively (see "Compare two runs"). Also, `json_schema_validity` does not check `format` (see its definition for the dialect and limits).

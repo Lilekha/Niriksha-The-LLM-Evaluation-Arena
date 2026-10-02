@@ -2,6 +2,7 @@
 
 **Version:** 0.1.0
 **Status:** implemented; unit and integration tested; not yet validated against human labels
+**Direction:** higher is better (`higher_is_better`; 1.0 is the desired outcome)
 
 ## Purpose
 Whether the stored answer, after a fixed normalisation, is identical to one of the accepted answers of a short-answer QA case. It measures string identity under that normalisation, nothing else. It does not measure whether an answer is semantically correct, well reasoned or useful.
@@ -50,7 +51,7 @@ Output record (`ScoreRecord`): `metric="normalized_exact_match"`, `metric_versio
 - `Paris.` scores 0 against `Paris`: punctuation is never removed.
 - A longer correct answer ("The capital is Paris") scores 0.
 - A truncated generation is scored like any other output; `finish_reason` is not consulted.
-- Per-case value only; aggregation and confidence intervals are not implemented (M2.2).
+- Per-case value; aggregation is per artifact (M2.2); confidence intervals are not implemented.
 
 ## Examples
 - **Positive:** answers `["Paris"]`, stored output `"  PARIS \n"` gives `1.0`, `matched_answer_index=0`.

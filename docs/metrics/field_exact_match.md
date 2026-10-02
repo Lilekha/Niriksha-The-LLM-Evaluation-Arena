@@ -2,6 +2,7 @@
 
 **Version:** 0.1.0
 **Status:** implemented; unit and integration tested; not yet validated against human labels
+**Direction:** higher is better (`higher_is_better`; 1.0 is the desired outcome)
 
 ## Purpose
 The fraction of the expected top-level fields that the stored output reproduces exactly, under strict, type-sensitive comparison. It measures value identity per field. It is **not** JSON Schema validation (see `json_schema_validity`) and does not measure semantic equivalence.
@@ -44,7 +45,7 @@ Output record: `metric="field_exact_match"`, `metric_version="0.1.0"`, `status`,
 - Extra fields are not penalised in `value`. A model that returns many extra keys can still score `1.0`; check `exact_object_match` or `extra_fields`.
 - No semantic equivalence: `"2026-10-01"` and `"1 October 2026"` differ, as do `"Asha"` and `"asha"`.
 - No partial credit within a nested object or array.
-- The value is per case; fields are weighted equally, and cases with different field counts are not weighted. Aggregation is not implemented (M2.2).
+- The value is per case; fields are weighted equally, and cases with different field counts are not weighted. Aggregation is per artifact (M2.2); there are no confidence intervals.
 - A truncated generation is scored like any other output.
 
 ## Examples

@@ -2,6 +2,8 @@
 
 Status: accepted. Date: 2026-10-02. Partly supersedes ADR 0004 item 9 (scores were in-memory only in M2.1).
 
+Note (M2.4): the statements below that say comparison across runs does not exist describe M2.2; a descriptive two-run comparison arrived in M2.4 ([ADR 0007](0007-run-comparison.md)). Ranking, confidence intervals and significance are still absent.
+
 Covers M2.2: persisting scores apart from the immutable run, verifying them, aggregating them and rendering reports. Everything is offline and read-only with respect to runs. There is still no real provider, JSON Schema validity (added in M2.3, ADR 0006), confidence interval, ranking or comparison across runs.
 
 ## Context

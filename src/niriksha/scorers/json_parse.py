@@ -12,6 +12,7 @@ from niriksha.scorers._common import failure_of, not_scored_for_failure, parse_j
 METRIC = "json_parse_validity"
 VERSION = "0.1.0"
 TASK = "json_extraction"
+DIRECTION = "higher_is_better"  # 1.0 is the desired outcome; see the metric document
 
 
 def score_case(case: ExtractionCase, request_id: str, result: GenerationResult) -> ScoreRecord:

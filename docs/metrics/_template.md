@@ -2,6 +2,7 @@
 
 **Version:** <e.g. 0.1.0; bump when the definition or implementation changes>
 **Status:** draft | implemented | validated
+**Direction:** higher_is_better | lower_is_better (the scorer module's `DIRECTION` constant; say what the best value means)
 
 ## Purpose
 What question this metric answers.

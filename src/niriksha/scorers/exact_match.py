@@ -10,6 +10,7 @@ from niriksha.scorers._common import failure_of, normalize_text, not_scored_for_
 METRIC = "normalized_exact_match"
 VERSION = "0.1.0"
 TASK = "short_answer_qa"
+DIRECTION = "higher_is_better"  # 1.0 is the desired outcome; see the metric document
 
 
 def matching_answer_index(output_text: str, answers: Sequence[str]) -> int | None:
