@@ -92,3 +92,19 @@ def test_boundary_scan_covers_the_dataset_and_run_modules():
         "execution",
     }
     assert expected <= scanned
+
+
+def test_boundary_scan_covers_the_run_reader_and_score_record():
+    scanned = {path.stem for path in CORE.rglob("*.py")}
+    assert {"runload", "scoring"} <= scanned
+
+
+def test_scorers_import_no_providers_or_network_libraries():
+    scorers = CORE.parent / "scorers"
+    modules = {path.stem for path in scorers.glob("*.py")}
+    assert {"exact_match", "json_parse", "field_match", "run", "_common"} <= modules
+    forbidden = tuple(name for name in FORBIDDEN if name != "niriksha.scorers")  # may import itself
+    for path in scorers.glob("*.py"):
+        found = imported_modules(path.read_text(encoding="utf-8"), "niriksha.scorers")
+        bad = {m for m in found for name in forbidden if m == name or m.startswith(name + ".")}
+        assert not bad, f"{path.name} imports forbidden modules: {sorted(bad)}"

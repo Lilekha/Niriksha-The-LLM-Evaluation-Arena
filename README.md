@@ -10,7 +10,9 @@ A model-agnostic platform for evaluating, benchmarking, and observing large lang
 
 Today the repository contains the project foundations (M0), the generation schemas, failure model and provider protocol (M1.1, [ADR 0002](docs/adr/0002-provider-contract.md)), a deterministic fake provider and a minimal sequential runner that times each call (M1.2), and local dataset loading with content hashing, provenance, run persistence and resume (M1.3, [ADR 0003](docs/adr/0003-dataset-identity-and-run-persistence.md)). All of it is tested offline. The fake provider returns scripted text, not model output, and the only datasets are synthetic test fixtures.
 
-There is still no scorer, CLI, config-file loading, real provider adapter, retry logic or benchmark dataset. Nothing here has been run against any real model, and real evaluations are not possible yet. A run's manifest records what was run; it does not make a run reproducible.
+M2.1 adds an offline run reader that verifies a stored run against its dataset, and three deterministic scorers (normalized exact match, JSON parse validity, field-level exact match; [ADR 0004](docs/adr/0004-run-integrity-and-scoring-contract.md)). They score stored outputs only, so they measure string and value identity as defined in [docs/metrics/](docs/metrics/), not semantic correctness.
+
+There is still no CLI, config-file loading, real provider adapter, retry logic, score persistence, aggregation or benchmark dataset. Nothing here has been run against any real model, and real evaluations are not possible yet. A run's manifest records what was run; it does not make a run reproducible.
 
 ## The problem
 
@@ -41,7 +43,7 @@ An independent evaluation core (runner, provider protocol, storage, manifests, s
 |---|---|---|
 | M0 | Repository foundations and documentation (no evaluation code) | complete |
 | M1 | Schemas, dataset loader, fake provider, runner, store, manifest, resume | implemented offline with the fake provider only (M1.1 to M1.3), integration-tested in M1.4; pending review |
-| M2 | Deterministic scorers, aggregation with confidence intervals | planned |
+| M2 | Deterministic scorers, aggregation with confidence intervals | in progress (M2.1: offline run reader and three deterministic scorers done; JSON Schema validity, aggregation and confidence intervals pending) |
 | M3 | OpenAI-compatible adapter (tested locally first), then opt-in real and local-model runs | planned |
 | M4 | English dataset v0.1, then Hindi and Kannada cases | planned |
 | M5 | Reports, paired comparisons, first honest write-up | planned |

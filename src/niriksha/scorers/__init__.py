@@ -1,1 +1,1 @@
-"""Scorers: pure functions over stored outputs."""
+"""Scorers: pure, deterministic functions over stored outputs. They never call a provider."""
