@@ -21,14 +21,15 @@ print(outcome.path)  # scores/my-run--normalized_exact_match--0.1.0.json
 print(outcome.created)  # True the first time; False when a verified artifact was reused
 ```
 
-The run is loaded and verified first (`RunIntegrityError` if it is incomplete or inconsistent). A QA run has one applicable metric. An extraction run has two, `json_parse_validity` and `field_exact_match`, and each gets its own artifact. Scoring the same outputs with another metric never regenerates anything:
+The run is loaded and verified first (`RunIntegrityError` if it is incomplete or inconsistent). A QA run has one applicable metric. An extraction run has three, `json_parse_validity`, `field_exact_match` and `json_schema_validity` (checks the output against the dataset's `output_schema`, Draft 2020-12; see [its definition](metrics/json_schema_validity.md)), and each gets its own artifact. Scoring the same outputs with another metric never regenerates anything:
 
 ```python
 score_run_to_artifact("runs/ex-run", "datasets/ex", "scores", "json_parse_validity")
 score_run_to_artifact("runs/ex-run", "datasets/ex", "scores", "field_exact_match")
+score_run_to_artifact("runs/ex-run", "datasets/ex", "scores", "json_schema_validity")
 ```
 
-A metric that does not apply to the run's task, an unknown metric, and an unregistered version all raise `ScoreArtifactError` before anything is written. Versions are never upgraded automatically.
+A metric that does not apply to the run's task, an unknown metric, an unregistered version, and (for `json_schema_validity`) a dataset schema that cannot be used offline all raise `ScoreArtifactError` before anything is written. Versions are never upgraded automatically.
 
 ## Scoring again
 Scoring a run with a metric that already has an artifact never overwrites it. The existing file is read strictly and compared with what the current code computes from the verified run (its structure, its source including the hashes of the run files, and the exact scorer version). If everything matches it is reused and nothing is written. If it is corrupt, `ScoreArtifactError` is raised; if it is well-formed but differs from the run or from the scorer's output, `ScoreArtifactMismatchError` is raised. In both cases the file is left untouched. To score under changed rules, release a new metric version.
@@ -99,4 +100,4 @@ There is no timestamp, so rewriting an artifact gives identical bytes.
 - The metrics measure string or value identity under rules written down in `docs/metrics/`. They do not measure semantic correctness, and they are not validated against human labels. A mean is a summary of per-case values, not a statement of model quality.
 - The hashes detect accidental corruption and drift. They do not authenticate: anyone who can write the files can rewrite an artifact and its hashes consistently.
 - A process killed while writing can leave a truncated artifact; it is refused on reading and blocks its name until it is removed by hand.
-- There is no ranking, confidence interval, significance test or comparison across runs, and no JSON Schema validity metric yet.
+- There is no ranking, confidence interval, significance test or comparison across runs, and `json_schema_validity` does not check `format` (see its definition for the dialect and limits).

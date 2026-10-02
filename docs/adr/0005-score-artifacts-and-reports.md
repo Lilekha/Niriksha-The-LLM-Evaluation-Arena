@@ -2,7 +2,7 @@
 
 Status: accepted. Date: 2026-10-02. Partly supersedes ADR 0004 item 9 (scores were in-memory only in M2.1).
 
-Covers M2.2: persisting scores apart from the immutable run, verifying them, aggregating them and rendering reports. Everything is offline and read-only with respect to runs. There is still no real provider, JSON Schema validity (M2.3), confidence interval, ranking or comparison across runs.
+Covers M2.2: persisting scores apart from the immutable run, verifying them, aggregating them and rendering reports. Everything is offline and read-only with respect to runs. There is still no real provider, JSON Schema validity (added in M2.3, ADR 0006), confidence interval, ranking or comparison across runs.
 
 ## Context
 Generation and scoring are separate (ADR 0004). To make scoring reproducible, its results need to be stored, tied to the exact run they were computed from, checkable without any provider, and summarised without ambiguity about failed generations.

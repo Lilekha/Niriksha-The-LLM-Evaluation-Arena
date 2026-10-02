@@ -184,7 +184,11 @@ def test_the_same_outputs_are_rescored_with_other_metrics_without_regenerating(
 
 
 def test_there_are_no_automatic_version_upgrades():
-    assert available_metrics("json_extraction") == ((FIELD, "0.1.0"), (JSON_VALID, "0.1.0"))
+    assert available_metrics("json_extraction") == (
+        (FIELD, "0.1.0"),
+        (JSON_VALID, "0.1.0"),
+        ("json_schema_validity", "0.1.0"),
+    )
     assert resolve_scorer(QA).VERSION == "0.1.0"  # the single registered version
     assert resolve_scorer(QA, "0.1.0").METRIC == QA
     with pytest.raises(ScoreArtifactError, match="no scorer implements"):
