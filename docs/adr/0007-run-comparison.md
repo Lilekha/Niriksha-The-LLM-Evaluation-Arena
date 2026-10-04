@@ -2,6 +2,8 @@
 
 Status: accepted. Date: 2026-10-02.
 
+Note (M2.5): the statements below that say there is no confidence interval describe M2.4; the paired summary gained a bootstrap interval in M2.5 ([ADR 0008](0008-paired-bootstrap-interval.md)). There is still no significance test or winner.
+
 Covers M2.4: a descriptive, deterministic comparison of two completed runs on one metric, built from their verified score artifacts. Offline and read-only. There is still no real provider, CLI, UI, confidence interval or significance test. Usage: [scoring guide](../scoring-guide.md).
 
 ## Context

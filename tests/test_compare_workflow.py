@@ -13,6 +13,7 @@ import niriksha.core.execution as execution_module
 import niriksha.core.runner as runner_module
 from ds_helpers import FIXTURES, qa, write_dataset
 from e2e_support import CrashingProvider, make_config
+from niriksha.core.bootstrap import paired_bootstrap_interval
 from niriksha.core.compare import (
     IncompatibleRunsError,
     Outcome,
@@ -340,6 +341,96 @@ def test_the_comparison_is_byte_identical_across_hash_seeds_and_directories():
         }
         done = subprocess.run(
             [sys.executable, "-c", CHILD], env=env, capture_output=True, text=True, check=True
+        )
+        digests.add(done.stdout.strip())
+    assert len(digests) == 1 and len(next(iter(digests))) == 64
+
+
+# -- the bootstrap interval end to end ------------------------------------------------------------
+
+
+def big_dataset(tmp_path, n=40):
+    cases = [qa(id=f"q{i:02d}", answers=[f"a{i}"]) for i in range(n)]
+    return write_dataset(tmp_path / "big", cases, dirname="big")
+
+
+def answers(correct_until, n=40, failed=()):
+    return [T if i in failed else (f"a{i}" if i < correct_until else WRONG) for i in range(n)]
+
+
+def test_forty_paired_cases_get_an_interval_through_the_whole_workflow(world):
+    big = big_dataset(world.tmp_path)
+    a = world.run("run-a", answers(25), dataset_dir=big, splits=("dev",))
+    b = world.run("run-b", answers(35), dataset_dir=big, splits=("dev",))
+    result = compare_runs(a, b, METRIC)
+    paired = result.summary.paired
+    deltas = [row.delta for row in result.rows]
+    assert paired.paired_cases == 40 and result.summary.same_scored_cases
+    assert sum(deltas) == 10.0 and paired.mean_difference == 0.25
+    ci = paired.confidence_interval
+    assert (ci.lower, ci.upper) == paired_bootstrap_interval(deltas)
+    assert ci.lower <= 0.25 <= ci.upper and ci.unavailable_reason is None
+    text = render_comparison_markdown(result)
+    assert f"[{ci.lower:+.6f}, {ci.upper:+.6f}]" in text
+    no_paths(world, text + render_comparison_json(result))
+    # swapping the runs mirrors the interval exactly
+    back = compare_runs(b, a, METRIC).summary.paired.confidence_interval
+    assert (back.lower, back.upper) == (-ci.upper, -ci.lower)
+
+
+def test_failed_generations_are_left_out_of_the_interval_not_counted_as_zero(world):
+    big = big_dataset(world.tmp_path)
+    a = world.run("run-a", answers(25, failed={0, 1, 2}), dataset_dir=big, splits=("dev",))
+    b = world.run("run-b", answers(35), dataset_dir=big, splits=("dev",))
+    result = compare_runs(a, b, METRIC)
+    assert result.summary.paired.paired_cases == 37
+    assert result.summary.mean_difference is None  # unequal coverage: no overall difference
+    ci = result.summary.paired.confidence_interval
+    paired_deltas = [row.delta for row in result.rows if row.delta is not None]
+    assert len(paired_deltas) == 37
+    assert (ci.lower, ci.upper) == paired_bootstrap_interval(paired_deltas)
+
+
+def test_a_small_workload_has_no_interval_and_says_why(world, pair):
+    result = compare_runs(*pair, METRIC)
+    ci = result.summary.paired.confidence_interval
+    assert result.summary.paired.paired_cases == 4 and ci.lower is None
+    assert ci.unavailable_reason == "too_few_paired_cases"
+    assert "unavailable (too_few_paired_cases: fewer than 30 paired cases)" in (
+        render_comparison_markdown(result)
+    )
+
+
+CHILD_BIG = """
+import hashlib, tempfile
+from pathlib import Path
+from ds_helpers import qa, write_dataset
+from test_compare_workflow import METRIC, T, World, answers
+from niriksha.core.compare import render_comparison_json, render_comparison_markdown
+from niriksha.scorers.comparison import compare_runs
+world = World(Path(tempfile.mkdtemp()))
+cases = [qa(id=f"q{i:02d}", answers=[f"a{i}"]) for i in range(40)]
+big = write_dataset(world.tmp_path / "big", cases, dirname="big")
+a = world.run("run-a", answers(25, failed={3}), dataset_dir=big, splits=("dev",))
+b = world.run("run-b", answers(35), dataset_dir=big, splits=("dev",))
+result = compare_runs(a, b, METRIC)
+assert result.summary.paired.confidence_interval.lower is not None
+data = render_comparison_json(result).encode() + render_comparison_markdown(result).encode()
+print(hashlib.sha256(data).hexdigest())
+"""
+
+
+def test_an_available_interval_is_byte_identical_across_hash_seeds_and_directories():
+    digests = set()
+    for seed in ("0", "1", "12345"):
+        env = {
+            **os.environ,
+            "PYTHONHASHSEED": seed,
+            "PYTHONPATH": os.pathsep.join([str(REPO / "tests"), str(REPO / "src")]),
+            "PYTHONUTF8": "1",
+        }
+        done = subprocess.run(
+            [sys.executable, "-c", CHILD_BIG], env=env, capture_output=True, text=True, check=True
         )
         digests.add(done.stdout.strip())
     assert len(digests) == 1 and len(next(iter(digests))) == 64
