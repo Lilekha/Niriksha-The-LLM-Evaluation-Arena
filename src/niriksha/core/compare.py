@@ -16,7 +16,7 @@ Semantics:
 
 - A difference is always ``candidate - baseline``. "Higher" means a larger number only. The metric's
   ``direction`` is recorded but no run is called better or a winner, and nothing here is a
-  significance test or a confidence interval.
+  significance test.
 - Two values are equal only if they are exactly equal floats. There is no tolerance.
 - A not-scored case has no value. It is never treated as 0.0 and has no per-case delta.
 - The overall means of the two runs average different cases unless both scored the same cases
@@ -24,6 +24,13 @@ Semantics:
   with the reason ``different_scored_cases``. Each run's own mean is always reported. The paired
   summary uses only the cases scored in both runs and is always reported; with no such case it
   is unavailable, with a reason.
+- The paired summary carries a 95% paired percentile bootstrap interval for the mean of the paired
+  differences (``niriksha.core.bootstrap`` defines the method, seed and resample count). It uses
+  only the existing per-case deltas, never an imputed score, and is unavailable with fewer than
+  ``MINIMUM_PAIRED_CASES`` paired cases. It reflects resampling of the evaluated cases only, not
+  repeated-generation variability or performance on unseen cases, and the minimum does not
+  guarantee its nominal coverage. A zero-width interval means the sample showed no variation, not
+  certainty.
 """
 
 import math
@@ -31,8 +38,16 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from niriksha.core.bootstrap import (
+    CONFIDENCE_PERCENT,
+    METHOD,
+    MINIMUM_PAIRED_CASES,
+    N_RESAMPLES,
+    SEED,
+    paired_bootstrap_interval,
+)
 from niriksha.core.dataset import Task
 from niriksha.core.generation import GenerationParams, NonBlank
 from niriksha.core.report import Aggregate, aggregate_records
@@ -40,8 +55,9 @@ from niriksha.core.runstore import ManifestDataset
 from niriksha.core.scorestore import ArtifactSelection, ScoreArtifact
 from niriksha.core.scoring import MetricName, MetricVersion, ScoreRecord, ScoreStatus
 
-COMPARISON_VERSION = 1
+COMPARISON_VERSION = 2
 NO_PAIRED_SCORED_CASES = "no_paired_scored_cases"
+TOO_FEW_PAIRED_CASES = "too_few_paired_cases"
 MEAN_UNAVAILABLE = "a_run_has_no_mean"
 DIFFERENT_SCORED_CASES = "different_scored_cases"
 
@@ -128,12 +144,37 @@ class CaseComparison(_Model):
         return self
 
 
+class ConfidenceInterval(_Model):
+    """Interval for the mean paired difference. Endpoints are null with a reason if unavailable."""
+
+    method: Literal["paired_percentile_bootstrap_v1"]
+    confidence_level: float = Field(allow_inf_nan=False)
+    n_resamples: int
+    seed: int
+    minimum_paired_cases: int
+    lower: float | None = Field(allow_inf_nan=False)
+    upper: float | None = Field(allow_inf_nan=False)
+    unavailable_reason: Literal["no_paired_scored_cases", "too_few_paired_cases"] | None
+
+    @model_validator(mode="after")
+    def _consistent(self):
+        if (self.lower is None) != (self.upper is None):
+            raise ValueError("lower and upper are both given or both null")
+        if (self.lower is None) != (self.unavailable_reason is not None):
+            raise ValueError("a reason is given exactly when there is no interval")
+        if self.lower is not None and self.upper is not None:
+            if not -1.0 <= self.lower <= self.upper <= 1.0:
+                raise ValueError("an interval for differences of values in [0, 1] lies in [-1, 1]")
+        return self
+
+
 class Paired(_Model):
     paired_cases: int
     baseline_mean: float | None
     candidate_mean: float | None
     mean_difference: float | None
     unavailable_reason: str | None
+    confidence_interval: ConfidenceInterval
 
     @model_validator(mode="after")
     def _consistent(self):
@@ -261,6 +302,28 @@ def _difference(baseline: float | None, candidate: float | None) -> float | None
     return None if baseline is None or candidate is None else candidate - baseline
 
 
+def _interval(deltas: list[float]) -> ConfidenceInterval:
+    """The interval over the paired deltas (selection order), or why there is none."""
+    reason = (
+        NO_PAIRED_SCORED_CASES
+        if not deltas
+        else TOO_FEW_PAIRED_CASES
+        if len(deltas) < MINIMUM_PAIRED_CASES
+        else None
+    )
+    lower, upper = (None, None) if reason else paired_bootstrap_interval(deltas)
+    return ConfidenceInterval(
+        method=METHOD,
+        confidence_level=CONFIDENCE_PERCENT / 100,
+        n_resamples=N_RESAMPLES,
+        seed=SEED,
+        minimum_paired_cases=MINIMUM_PAIRED_CASES,
+        lower=lower,
+        upper=upper,
+        unavailable_reason=reason,
+    )
+
+
 def build_comparison(
     baseline: ComparisonInput, candidate: ComparisonInput, direction: str
 ) -> Comparison:
@@ -302,6 +365,7 @@ def build_comparison(
             candidate_mean=paired_c,
             mean_difference=paired_diff,
             unavailable_reason=None if paired_diff is not None else NO_PAIRED_SCORED_CASES,
+            confidence_interval=_interval([row.delta for row in rows if row.delta is not None]),
         ),
         mean_difference=overall,
         mean_difference_unavailable_reason=(
@@ -364,6 +428,29 @@ def _varying_text(v: Varying) -> str:
     return ", ".join(parts)
 
 
+def _interval_lines(paired: Paired) -> list[str]:
+    ci = paired.confidence_interval
+    label = f"- {round(ci.confidence_level * 100)}% bootstrap interval for the mean difference: "
+    if ci.lower is None or ci.upper is None:
+        reason = (
+            f"{ci.unavailable_reason}: fewer than {ci.minimum_paired_cases} paired cases"
+            if ci.unavailable_reason == TOO_FEW_PAIRED_CASES
+            else ci.unavailable_reason
+        )
+        return [label + f"unavailable ({reason})"]
+    lines = [
+        label + f"[{_number(ci.lower, signed=True)}, {_number(ci.upper, signed=True)}] "
+        f"({ci.n_resamples:,} resamples of the {paired.paired_cases} paired cases, "
+        f"seed {ci.seed}, method `{ci.method}`)"
+    ]
+    if ci.lower == ci.upper:
+        lines.append(
+            "- The interval has zero width: the paired differences did not vary in this sample. "
+            "That does not imply certainty."
+        )
+    return lines
+
+
 def render_comparison_markdown(comparison: Comparison) -> str:
     """A readable rendering. Values show six decimals; the JSON comparison is exact."""
     m, b, c, s = comparison.metric, comparison.baseline, comparison.candidate, comparison.summary
@@ -421,6 +508,7 @@ def render_comparison_markdown(comparison: Comparison) -> str:
             if s.paired.mean_difference is None
             else _number(s.paired.mean_difference, signed=True)
         ),
+        *_interval_lines(s.paired),
     ]
     overall = "- Difference of the overall means (candidate - baseline): " + (
         f"unavailable ({s.mean_difference_unavailable_reason})"
@@ -457,7 +545,15 @@ def render_comparison_markdown(comparison: Comparison) -> str:
             f"| {_cell(row.request_id)} | {row.outcome.value} | {_side_cell(row.baseline)} "
             f"| {_side_cell(row.candidate)} | {delta} |"
         )
+    ci = s.paired.confidence_interval
     lines += [
+        "",
+        f"Interval method: `{ci.method}`, a percentile bootstrap of the mean paired difference "
+        f"({ci.n_resamples:,} resamples, seed {ci.seed}, computed only with at least "
+        f"{ci.minimum_paired_cases} paired cases). It resamples the evaluated cases only: it does "
+        "not capture variability across repeated generations, other prompts or cases that were "
+        "not evaluated, and the minimum does not guarantee its nominal coverage. It is an "
+        "uncertainty estimate, not a significance test.",
         "",
         f"This is a descriptive difference on {n} cases. It makes no claim of statistical "
         "significance and does not show that either model is better in general.",

@@ -4,8 +4,10 @@ import json
 
 import pytest
 
+from niriksha.core.bootstrap import METHOD, MINIMUM_PAIRED_CASES, paired_bootstrap_interval
 from niriksha.core.compare import (
     ComparisonInput,
+    ConfidenceInterval,
     IncompatibleRunsError,
     Outcome,
     Paired,
@@ -71,6 +73,28 @@ def artifact(
     fields.update(source)
     records = tuple(record(i, v, metric, version) for i, v in zip(ids, values, strict=True))
     return build_artifact(ArtifactSource(**fields), metric, version, task, records)
+
+
+def interval(**changes):
+    fields = {
+        "method": "paired_percentile_bootstrap_v1",
+        "confidence_level": 0.95,
+        "n_resamples": 10_000,
+        "seed": 0,
+        "minimum_paired_cases": 30,
+        "lower": -0.1,
+        "upper": 0.2,
+        "unavailable_reason": None,
+    }
+    fields.update(reason_alias(changes))
+    return ConfidenceInterval(**fields)
+
+
+def reason_alias(changes):
+    changes = dict(changes)
+    if "reason" in changes:
+        changes["unavailable_reason"] = changes.pop("reason")
+    return changes
 
 
 def compare(
@@ -226,6 +250,16 @@ def test_no_paired_scored_cases_makes_the_paired_result_unavailable_with_a_reaso
         "candidate_mean": None,
         "mean_difference": None,
         "unavailable_reason": "no_paired_scored_cases",
+        "confidence_interval": {
+            "method": "paired_percentile_bootstrap_v1",
+            "confidence_level": 0.95,
+            "n_resamples": 10000,
+            "seed": 0,
+            "minimum_paired_cases": 30,
+            "lower": None,
+            "upper": None,
+            "unavailable_reason": "no_paired_scored_cases",
+        },
     }
 
 
@@ -275,6 +309,7 @@ def test_a_summary_cannot_pair_unequal_coverage_with_a_numeric_overall_differenc
         candidate_mean=0.0,
         mean_difference=-1.0,
         unavailable_reason=None,
+        confidence_interval=interval(lower=None, upper=None, reason="too_few_paired_cases"),
     )
     with pytest.raises(ValueError, match="not comparable"):
         Summary(
@@ -343,7 +378,7 @@ def test_the_json_is_lossless_and_stable_and_the_markdown_is_deterministic():
     first, second = render_comparison_json(result), render_comparison_json(result)
     assert first == second and first.endswith("\n")
     document = json.loads(first)
-    assert document["comparison_version"] == 1
+    assert document["comparison_version"] == 2
     assert document["metric"]["direction"] == "higher_is_better"
     assert list(document["summary"]["outcomes"]) == [o.value for o in Outcome]
     assert type(result).model_validate_json(first) == result
@@ -380,3 +415,173 @@ def test_every_registered_scorer_declares_a_valid_direction():
     assert REGISTRY
     for key, module in REGISTRY.items():
         assert module.DIRECTION in ("higher_is_better", "lower_is_better"), key
+
+
+# -- the bootstrap interval for the paired mean difference ----------------------------------------
+
+
+def many(n):
+    return [f"c{i:03d}" for i in range(n)]
+
+
+def pair_of(n, baseline=None, candidate=None):
+    """Values for n cases: by default a mix of wins, ties and losses."""
+    base = baseline or [float(i % 2) for i in range(n)]
+    cand = candidate or [float((i // 2) % 2) for i in range(n)]
+    return base, cand
+
+
+def ci_of(result):
+    return result.summary.paired.confidence_interval
+
+
+def row_deltas(result):
+    return [row.delta for row in result.rows if row.delta is not None]
+
+
+def test_the_interval_boundary_is_thirty_paired_cases():
+    assert MINIMUM_PAIRED_CASES == 30
+    for n, available in ((0, False), (1, False), (29, False), (30, True), (31, True)):
+        if n == 0:
+            result = compare([None] * 4, [None] * 4)
+        else:
+            base, cand = pair_of(n)
+            result = compare(base, cand, ids=many(n))
+        ci = ci_of(result)
+        assert (ci.lower is not None) is available, n
+        assert (ci.upper is not None) is available, n
+        assert ci.method == METHOD and ci.confidence_level == 0.95
+        assert (ci.n_resamples, ci.seed, ci.minimum_paired_cases) == (10_000, 0, 30)
+        if not available:
+            assert ci.lower is None and ci.upper is None
+            expected = "no_paired_scored_cases" if n == 0 else "too_few_paired_cases"
+            assert ci.unavailable_reason == expected
+        else:
+            assert ci.unavailable_reason is None
+
+
+def test_the_interval_is_the_bootstrap_of_the_reported_row_deltas_in_order():
+    base, cand = pair_of(40)
+    result = compare(base, cand, ids=many(40))
+    deltas = row_deltas(result)
+    assert len(deltas) == 40 == result.summary.paired.paired_cases
+    assert (ci_of(result).lower, ci_of(result).upper) == paired_bootstrap_interval(deltas)
+    assert ci_of(result).lower <= result.summary.paired.mean_difference <= ci_of(result).upper
+
+
+def test_missing_scores_are_excluded_and_never_imputed_as_zero():
+    n = 35
+    base, cand = pair_of(n, [1.0] * n, [float(i % 2) for i in range(n)])
+    holes = list(base)
+    for i in range(5):
+        holes[i] = None  # the baseline did not score five cases
+    result = compare(holes, cand, ids=many(n))
+    assert result.summary.paired.paired_cases == 30
+    assert not result.summary.same_scored_cases
+    deltas = [c - 1.0 for c in cand[5:]]
+    assert (ci_of(result).lower, ci_of(result).upper) == paired_bootstrap_interval(deltas)
+    imputed = [c - 0.0 for c in cand[:5]] + deltas  # what a zero imputation would have done
+    assert paired_bootstrap_interval(imputed) != (ci_of(result).lower, ci_of(result).upper)
+    # one more missing score leaves 29 paired cases: no interval
+    holes[5] = None
+    assert ci_of(compare(holes, cand, ids=many(n))).unavailable_reason == "too_few_paired_cases"
+
+
+def test_unequal_coverage_still_gets_a_paired_interval_but_no_overall_difference():
+    n = 40
+    base, cand = pair_of(n)
+    base[0] = None
+    result = compare(base, cand, ids=many(n))
+    assert result.summary.mean_difference is None
+    assert result.summary.paired.paired_cases == 39
+    assert ci_of(result).lower is not None
+
+
+def test_swapping_baseline_and_candidate_mirrors_the_interval_exactly():
+    base, cand = pair_of(40)
+    forward = ci_of(compare(base, cand, ids=many(40)))
+    backward = ci_of(compare(cand, base, ids=many(40)))
+    assert (backward.lower, backward.upper) == (-forward.upper, -forward.lower)
+
+
+def test_identical_runs_give_a_zero_width_interval_that_is_not_called_certain():
+    values = [float(i % 2) for i in range(32)]
+    result = compare(values, list(values), ids=many(32))
+    assert (ci_of(result).lower, ci_of(result).upper) == (0.0, 0.0)
+    text = render_comparison_markdown(result)
+    assert "zero width" in text and "does not imply certainty" in text
+    wide = render_comparison_markdown(compare(*pair_of(40), ids=many(40)))
+    assert "zero width" not in wide
+
+
+def test_the_interval_is_reported_consistently_in_json_and_markdown():
+    result = compare(*pair_of(40), ids=many(40))
+    ci = ci_of(result)
+    document = json.loads(
+        render_comparison_json(result),
+        parse_constant=lambda name: pytest.fail(f"{name} in the JSON report"),
+    )
+    block = document["summary"]["paired"]["confidence_interval"]
+    assert block == {
+        "method": "paired_percentile_bootstrap_v1",
+        "confidence_level": 0.95,
+        "n_resamples": 10000,
+        "seed": 0,
+        "minimum_paired_cases": 30,
+        "lower": ci.lower,
+        "upper": ci.upper,
+        "unavailable_reason": None,
+    }
+    text = render_comparison_markdown(result)
+    assert f"[{ci.lower:+.6f}, {ci.upper:+.6f}]" in text
+    assert "95% bootstrap interval for the mean difference" in text
+    assert "10,000 resamples of the 40 paired cases, seed 0" in text
+    assert type(result).model_validate_json(render_comparison_json(result)) == result
+
+
+def test_an_unavailable_interval_is_explained_in_both_renderings():
+    few = compare(*pair_of(12), ids=many(12))
+    text = render_comparison_markdown(few)
+    assert "unavailable (too_few_paired_cases: fewer than 30 paired cases)" in text
+    none = render_comparison_markdown(compare([None] * 4, [None] * 4))
+    assert (
+        "bootstrap interval for the mean difference: unavailable (no_paired_scored_cases)" in none
+    )
+    block = json.loads(render_comparison_json(few))["summary"]["paired"]["confidence_interval"]
+    assert block["lower"] is None and block["upper"] is None
+    assert block["unavailable_reason"] == "too_few_paired_cases"
+
+
+@pytest.mark.parametrize("n", [3, 40])
+def test_the_limitations_are_always_stated_and_nothing_claims_significance(n):
+    text = render_comparison_markdown(compare(*pair_of(n), ids=many(n))).lower()
+    assert "resamples the evaluated cases only" in text
+    assert "repeated generations" in text and "not evaluated" in text
+    assert "does not guarantee its nominal coverage" in text
+    assert "not a significance test" in text
+    for banned in ("significantly", "p-value", "outperform", "better than", "includes zero"):
+        assert banned not in text
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"lower": 0.3, "upper": 0.1},
+        {"lower": 0.1, "upper": None},
+        {"lower": None, "upper": None},  # no reason given
+        {"lower": 0.1, "upper": 0.2, "reason": "too_few_paired_cases"},
+        {"lower": float("nan"), "upper": 0.2},
+        {"lower": -1.5, "upper": 0.2},
+        {"lower": -0.1, "upper": float("inf")},
+        {"lower": None, "upper": None, "reason": "something_else"},
+    ],
+)
+def test_an_inconsistent_interval_is_refused(changes):
+    with pytest.raises(ValueError):
+        interval(**changes)
+
+
+def test_a_consistent_interval_is_accepted_available_or_not():
+    assert interval().lower == -0.1
+    unavailable = interval(lower=None, upper=None, reason="no_paired_scored_cases")
+    assert unavailable.lower is None and unavailable.upper is None

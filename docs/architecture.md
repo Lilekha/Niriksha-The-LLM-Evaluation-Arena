@@ -97,7 +97,7 @@ Implemented: `niriksha.core.scorestore` (the artifact model, strict reading, exc
 - One artifact is one metric applied to one run, stored as `scores/<run_id>--<metric>--<version>.json`, apart from the immutable run. It records the source run (run ID, SHA-256 of the exact bytes of `manifest.json` and `results.jsonl`, dataset identity, selection, prompt hash, provider and model), the metric and version, the per-case `ScoreRecord`s in selection order, and `records_sha256` over their canonical JSON. It has no timestamp, so rewriting it gives identical bytes.
 - Scoring never overwrites. An existing artifact is read strictly and reused only if it equals what the current scorer computes from the verified run; a corrupt, different or unverifiable one raises a typed error and is left alone. Verification uses the scorer registered for the artifact's exact `(metric, version)`; there are no automatic upgrades.
 - Aggregation is over scored cases only; not-scored cases are counted, with reasons, and never treated as 0.0. With no scored case the mean is unavailable, not 0. Reports (JSON, lossless; Markdown, presentational) are deterministic and regenerated from the artifact alone.
-- The hashes are integrity checks, not authentication. There is no ranking or confidence interval; two runs can be compared descriptively since M2.4 ("Run comparison" below).
+- The hashes are integrity checks, not authentication. There is no ranking; two runs can be compared descriptively since M2.4, with a bootstrap interval since M2.5 ("Run comparison" below).
 
 ## JSON Schema validity (implemented in M2.3)
 
@@ -109,4 +109,5 @@ Implemented: `niriksha.core.scorestore` (the artifact model, strict reading, exc
 
 - Comparable means the same metric (name, version, task), dataset identity and selection, and two distinct runs; otherwise `IncompatibleRunsError` names the mismatching fields. Provider, model, prompt and generation parameters may differ and are reported, with a warning when the prompt or parameters differ.
 - Per-run aggregates reuse `aggregate_records`. The paired summary covers only the cases both runs scored and is prominent when the runs scored different cases. Not-scored cases are never zero and have no delta. Each scorer declares a `DIRECTION`, which the report records; the report is descriptive and names no winner.
-- Reports contain no timestamps and no paths. Definition and limits: [ADR 0007](adr/0007-run-comparison.md).
+- The paired summary carries a 95% paired percentile bootstrap interval for the mean difference (M2.5): `niriksha.core.bootstrap` (standard library only; 10,000 resamples, seed 0, fixed quantile convention) resamples the existing per-case deltas, never an imputed score, and the interval is unavailable with null endpoints and a reason below 30 paired cases. It reflects resampling of the evaluated cases only, not repeated-generation variability or unseen cases. Comparison reports are version 2.
+- Reports contain no timestamps and no paths. Definitions and limits: [ADR 0007](adr/0007-run-comparison.md) and [ADR 0008](adr/0008-paired-bootstrap-interval.md).
