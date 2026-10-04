@@ -15,8 +15,9 @@ Aggregate semantics:
   (``no_cases`` or ``no_scored_cases``). The mean is never reported as 0.
 - ``not_scored_by_reason`` counts the not-scored records by their reason, sorted by reason.
 
-This is a per-artifact summary. There is no ranking, confidence interval, significance claim or
-comparison across runs; the metrics measure only what docs/metrics/ defines.
+This is a per-artifact summary. There is no ranking, confidence interval or significance claim;
+two runs are compared descriptively in niriksha.core.compare. The metrics measure only what
+docs/metrics/ defines.
 """
 
 import math

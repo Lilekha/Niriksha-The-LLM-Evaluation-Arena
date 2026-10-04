@@ -22,6 +22,7 @@ from niriksha.scorers._common import failure_of, not_scored_for_failure, parse_j
 METRIC = "json_schema_validity"
 VERSION = "0.1.0"
 TASK = "json_extraction"
+DIRECTION = "higher_is_better"  # 1.0 is the desired outcome; see the metric document
 DIALECT = "https://json-schema.org/draft/2020-12/schema"
 
 _REFS = ("$ref", "$dynamicRef")

@@ -2,6 +2,7 @@
 
 **Version:** 0.1.0
 **Status:** implemented; unit and integration tested; not yet validated against human labels
+**Direction:** higher is better (`higher_is_better`; 1.0 is the desired outcome)
 
 ## Purpose
 Whether the stored output parses as JSON under the policy below. It measures parse validity only. It is **not** JSON Schema compliance and says nothing about whether the content is right: `{"unrelated": true}` is valid.
@@ -39,7 +40,7 @@ Output record: `metric="json_parse_validity"`, `metric_version="0.1.0"`, `status
 - A valid document of the wrong shape or with wrong values scores 1.0. Use `field_exact_match` for values; use `json_schema_validity` for shape.
 - Python's parser decides edge cases. Behaviour on integers beyond the digit limit and on extreme nesting follows the interpreter (its integer digit limit and recursion limit), not the JSON specification. The tests therefore check the real inputs only under the default limits and check the mapping to the named failure codes with injected errors under any limits.
 - A truncated generation is scored like any other output; `finish_reason` is not consulted.
-- Per-case value only; no aggregation yet.
+- Per-case value; aggregation is per artifact (M2.2); there are no confidence intervals.
 
 ## Examples
 - **Positive:** `{"name": "Asha", "age": 30}` gives `1.0`, `top_level_type="object"`.

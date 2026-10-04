@@ -33,11 +33,11 @@ GUARD_MISSING_EXIT_CODE = 86  # the child found no network guard when it first c
 TORN_FRAGMENT = b'{"request_id": "torn", "request_sha256": "ab'  # an incomplete JSONL record
 
 
-def make_config(run_id: str, splits=("dev",)) -> RunConfig:
+def make_config(run_id: str, splits=("dev",), model: str = "m") -> RunConfig:
     return RunConfig(
         run_id=run_id,
         splits=tuple(splits),
-        model="m",
+        model=model,
         prompt=PromptTemplate(user="Answer: {input}"),
         params=GenerationParams(temperature=0.0),
     )

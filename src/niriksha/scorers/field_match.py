@@ -19,6 +19,7 @@ from niriksha.scorers._common import (
 METRIC = "field_exact_match"
 VERSION = "0.1.0"
 TASK = "json_extraction"
+DIRECTION = "higher_is_better"  # 1.0 is the desired outcome; see the metric document
 
 
 def _nfc(key: str) -> str:

@@ -2,6 +2,7 @@
 
 **Version:** 0.1.0
 **Status:** implemented; unit and workflow tested; not validated against human labels
+**Direction:** higher is better (`higher_is_better`; 1.0 is the desired outcome)
 
 ## Purpose
 Whether the stored output is valid JSON **and** satisfies the dataset's `output_schema`. It measures structural conformance only. It does not say the values are correct: `{"name": "Zed", "age": 1}` conforms to the fixture schema whatever the case expects. Use `field_exact_match` for values.
@@ -48,7 +49,7 @@ Same distinction as the other metrics: a failed generation is never dropped or z
 - A catastrophic-backtracking `pattern` combined with adversarial output can make validation run for a very long time. There is no in-process timeout.
 - A schema whose recursion needs no output depth to overflow the stack (for example `{"$ref": "#"}`, or a `$ref` cycle) is detected before scoring by validating a null, boolean, number, string, empty array and empty object, and raises `ScoreArtifactError`. A defect that only a particular output shape reaches cannot be told apart from an over-deep output: that case is reported as `failure="too_deeply_nested"` (scored `0.0`), the same code used for an over-deep output. A legitimate recursive schema (for example a tree) works; only an output deep enough to exhaust the stack (about 160 levels for a simple tree schema, fewer with more nested keywords) gets `too_deeply_nested`.
 - Results depend on the installed `jsonschema` version, which is not recorded in the artifact (the artifact format is unchanged). Verification recomputes and compares, so a behaviour change in the library shows up as a mismatch; a deliberate rule change must ship as a new metric version.
-- Per-case value only; no confidence interval or comparison.
+- Per-case value; aggregation is per artifact and two runs can be compared descriptively (M2.4); there is no confidence interval.
 
 ## Examples (fixture schema: `name` string, `age` integer, both required)
 - **Positive:** `{"name": "Asha", "age": 30}` gives `1.0`.
