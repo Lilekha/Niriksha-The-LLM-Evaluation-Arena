@@ -2,7 +2,9 @@
 
 Status: accepted. Date: 2026-10-04.
 
-Covers M3b stage B: the safeguards and tooling for a first live smoke test of the OpenAI-compatible adapter ([ADR 0009](0009-openai-compatible-adapter-and-retries.md)). No live request has been made and none is part of this change. The provider research and the gate are recorded in [provider-validation.md](../provider-validation.md).
+Covers M3b stage B: the safeguards and tooling for a first live smoke test of the OpenAI-compatible adapter ([ADR 0009](0009-openai-compatible-adapter-and-retries.md)). No live request was made while this stage was built or tested, and none is part of this change. The provider research and the gate are recorded in [provider-validation.md](../provider-validation.md).
+
+Update (2026-10-05): one live smoke test (Stage C) has since been run, with Groq and `openai/gpt-oss-20b`; its observations are in provider-validation.md. It does not change the decisions below, and each further live request still needs separate explicit approval.
 
 ## Context
 ADR 0001 sets a ₹0 budget and says a provider is a candidate "only after access, limits and terms are confirmed". Nothing in the repository defined M3b, so this ADR fixes what the first live check may do.

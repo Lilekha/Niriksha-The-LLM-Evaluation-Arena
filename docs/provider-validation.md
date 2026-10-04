@@ -1,8 +1,8 @@
 # Real-provider validation (M3b)
 
-**Status (2026-10-04): the harness exists; no live request has been made.** No account was created, no key was requested or used, no model was downloaded, and the adapter has still only been exercised against a local fake server. Nothing below shows that any provider works with Niriksha.
+**Status (updated 2026-10-05): the harness exists and one live smoke test has been run (see "Observations from live runs").** While the harness was built (Stage B), no live request was made, no account was created, no key was requested or used, and no model was downloaded. The one live smoke test sent 8 requests to Groq's OpenAI-compatible API with `openai/gpt-oss-20b`, using synthetic fixtures only. It shows connectivity and successful structured extraction on a tiny sample. It is not a general provider validation, a demonstrated QA result, or evidence of model quality: the QA outputs were empty, so the QA score measures nothing.
 
-Live validation needs a separate, explicit approval (Stage C below). Starting `scripts/live_smoke.py` is not that approval.
+Every live request needs its own separate, explicit approval (Stage C below). Starting `scripts/live_smoke.py` is not that approval, and the one completed run does not authorize further runs.
 
 ## Where the facts come from
 The provider facts below were read from public documentation on 2026-10-04 through a tool that returns summaries of the pages, not their raw text. Check the cited page before relying on a number. Where an official page did not state something it is marked **unverified**, and facts that came only from forum posts or search snippets are marked as such. Third-party "free API" listings were not used. Terms, limits and model lists change; re-check on the day.
@@ -52,12 +52,12 @@ Base URL `http://localhost:11434/v1/`; the API key is "required but ignored"; su
 ## Recommendation
 1. Groq with `llama-3.1-8b-instant`, **only after** the three account-side checks above pass and are recorded here.
 2. Otherwise local Ollama with one small model, after approving the download.
-3. Otherwise postpone the live test. The adapter then stays documented as "not validated against a real service".
+3. Otherwise postpone further live testing. The adapter then stays documented as not generally validated against a real service: the only live evidence is the one tiny smoke test recorded under "Observations from live runs".
 
 ## Stages
 - **Stage A (done):** research and this record.
-- **Stage B (done):** `scripts/live_smoke.py`, its offline tests and these documents. No live request.
-- **Stage C (not started, needs separate explicit approval):** before any live request, the exact endpoint, model ID, request plan, token caps, the data terms for that tier and the open uncertainties are presented and approved. Passing the script's confirmation prompt does not count.
+- **Stage B (done):** `scripts/live_smoke.py`, its offline tests and these documents. No live request was made in this stage.
+- **Stage C (first run done 2026-10-04, see Observations; each further run needs separate explicit approval):** before any live request, the exact endpoint, model ID, request plan, token caps, the data terms for that tier and the open uncertainties are presented and approved. Passing the script's confirmation prompt does not count.
 
 ## Runbook (Stage C, after approval)
 Run it yourself in a shell where the key is set for this session only (never in a file, never pasted into chat). In PowerShell:
@@ -80,7 +80,19 @@ Provider identity in the records: smoke-run manifests record the provider name a
 Every request yields a result (a success or a typed failure); the request count equals the plan; both runs pass `load_run`; scoring and `verify_artifact` pass; token use stays within the caps; the key appears in no run or score file; the dashboard shows no spend. A failure to meet this is a finding, not something to hide.
 
 ## Observations from live runs
-None yet. No live request has been made.
+
+### First smoke test (2026-10-04): Groq, `openai/gpt-oss-20b`
+Endpoint: Groq's OpenAI-compatible API. Model: `openai/gpt-oss-20b` (the server returned the same name). Runs: `smoke-qa-20261004t190318z` and `smoke-extraction-20261004t190318z`, 8 requests in total, one attempt each, temperature 0, `max_tokens` 32 for QA and 128 for extraction.
+
+| Run | Requests | Result | Reported total tokens |
+|---|---|---|---|
+| QA (5 cases) | 5 of 5 succeeded | All five visible outputs were empty. All five had `finish_reason="length"` and used the full 32-token completion cap. Normalized exact match = 0.000. | 622 |
+| Extraction (3 cases) | 3 of 3 succeeded | JSON parse validity, JSON Schema validity and field exact match were all 1.000 on this three-case sample. | 553 |
+
+- **The QA score of 0.000 is not a measurement of QA accuracy.** No visible answer was produced, so there was nothing to score. An empty output from a successful generation is scored 0.0 by the metric's definition.
+- **Persistence and verification:** both runs loaded successfully (`load_run`) and all four score artifacts passed verification (`verify_artifact`).
+- **Hypothesis, not verified:** the model may have used its completion budget without producing visible text. Two things are consistent with this: the extraction requests reported far more completion tokens than their short visible outputs, and the QA requests reported exactly the cap with empty text. The artifacts do not contain the cause, and this has not been confirmed.
+- **What these results show:** connectivity to the endpoint and successful structured extraction on a tiny sample. They do not show general model quality, QA ability, or how the adapter behaves with other models or settings.
 
 ## Limits of this validation
 One model, one endpoint, one date; synthetic prompts only; three cases that do not support any quality claim; no retry behaviour is exercised on purpose (a real 429 is observed only if it happens); cost stays unknown because the adapter computes none.

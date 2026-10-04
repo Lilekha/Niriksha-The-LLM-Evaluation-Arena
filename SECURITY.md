@@ -1,6 +1,6 @@
 # Security
 
-Niriksha is pre-alpha. It has an OpenAI-compatible HTTP adapter (M3a) and a manual live smoke script (M3b), but the adapter has only ever been exercised against a local fake server: the tests and CI make no real provider calls, use no real keys and need no credentials, and no live request has been made yet. The smoke script is outside CI and pytest, needs a separate explicit approval before use, and is described in `docs/provider-validation.md`. These rules apply from the start.
+Niriksha is pre-alpha. It has an OpenAI-compatible HTTP adapter (M3a) and a manual live smoke script (M3b), but the adapter's tests exercise only a local fake server: the tests and CI make no real provider calls, use no real keys and need no credentials. One live smoke test (8 requests to Groq with synthetic fixtures, 2026-10-04) has been run outside CI; it shows connectivity only and is not a security or quality validation. The smoke script is outside CI and pytest, needs a separate explicit approval before each use, and is described in `docs/provider-validation.md`. These rules apply from the start.
 
 ## Secret handling
 
