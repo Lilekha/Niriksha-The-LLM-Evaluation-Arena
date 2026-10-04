@@ -384,9 +384,9 @@ def test_contract_violation_stops_the_run_and_later_cases_are_never_called(tmp_p
 # -- failures and model identifiers persist faithfully --------------------------------------------
 
 
-def test_all_seven_failure_kinds_persist_and_read_back(tmp_path):
+def test_all_nine_failure_kinds_persist_and_read_back(tmp_path):
     kinds = list(FailureKind)
-    assert len(kinds) == 7
+    assert len(kinds) == 9
     cases = [qa(id=f"f{i}") for i in range(len(kinds) + 1)]
     directory = write_dataset(tmp_path, cases, dirname="failures")
     config, dataset = make_config("failures"), load_dataset(directory)
@@ -394,12 +394,14 @@ def test_all_seven_failure_kinds_persist_and_read_back(tmp_path):
     summary = execute_run(config, dataset, provider, tmp_path / "runs", **deterministic())
 
     lines = read_results(summary.run_dir).lines
-    assert len(provider.calls) == 8  # one call per case: no failure was retried
+    assert len(provider.calls) == 10  # one call per case: no failure was retried
     for line, kind in zip(lines, kinds, strict=False):
         result = line.execution.result
         assert isinstance(result, GenerationFailure)
         assert result.kind is kind and result.request_id == line.request_id
-        assert result.retryable is (kind in {"timeout", "rate_limit", "server_error"})
+        assert result.retryable is (
+            kind in {"timeout", "rate_limit", "server_error", "connection_error"}
+        )
         assert line.execution.elapsed_s == 0.5
     assert lines[-1].execution.result.status == "ok"
     audit_run(summary.run_dir, config, directory)

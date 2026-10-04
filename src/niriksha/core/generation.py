@@ -88,9 +88,18 @@ class FailureKind(StrEnum):
     INVALID_REQUEST = "invalid_request"  # provider rejected a schema-valid request
     UNSUPPORTED_CAPABILITY = "unsupported_capability"  # needs a capability not declared
     INTERNAL_ERROR = "internal_error"  # adapter-detected fault; NOT a catch-all for exceptions
+    AUTH_ERROR = "auth_error"  # credentials missing, invalid or not permitted (HTTP 401/403)
+    CONNECTION_ERROR = "connection_error"  # no usable connection or response (refused, reset, DNS)
 
 
-_RETRYABLE = frozenset({FailureKind.TIMEOUT, FailureKind.RATE_LIMIT, FailureKind.SERVER_ERROR})
+_RETRYABLE = frozenset(
+    {
+        FailureKind.TIMEOUT,
+        FailureKind.RATE_LIMIT,
+        FailureKind.SERVER_ERROR,
+        FailureKind.CONNECTION_ERROR,
+    }
+)
 
 # ponytail: substring heuristic for obvious secret-bearing keys; not a secret-handling guarantee.
 _FORBIDDEN_KEY_PARTS = (

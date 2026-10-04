@@ -6,7 +6,7 @@
 
 - **Core engine** (`niriksha.core`): runner, provider protocol (request and result types), dataset loading and hashing, run storage and manifests. Never imports a concrete provider.
 - **Scorers** (`niriksha.scorers`): pure functions over stored outputs. Each carries a version.
-- **Provider adapters** (`niriksha.providers`): implement the provider protocol. The first is a deterministic fake provider (implemented in M1.2). Real providers (an OpenAI-compatible HTTP adapter, for cloud and local runtimes) come later and are opt-in.
+- **Provider adapters** (`niriksha.providers`): implement the provider protocol. The first is a deterministic fake provider (implemented in M1.2). An OpenAI-compatible HTTP adapter (for cloud and local runtimes) is implemented in M3a and tested only against a local fake server; real provider runs are opt-in and not started.
 - **Data and configuration**: versioned datasets (immutable cases, content-hash identity; loading implemented in M1.3) and provider/run profiles as data files in `datasets/` and `configs/` (profiles and config loading are not implemented; run settings are a Python `RunConfig` for now). Profiles will hold environment variable names, never secret values.
 - **Outputs**: raw results, per-attempt records, run manifest, scores, and reports.
 
@@ -33,7 +33,7 @@ Calling a model costs money or time and is not exactly repeatable. Scoring is ch
 ## Design rules
 
 - Failures are recorded as typed outcomes. A failed model or evaluator is never silently substituted.
-- Every attempt, including retries, is stored.
+- Every attempt, including retries, is stored (M3a: when a retry policy is enabled, `ExecutionRecord.attempts`).
 - A request needing a capability the provider has not declared fails loudly; parameters are not silently dropped.
 - Benchmark cases are immutable. A correction creates a new dataset version with a changelog entry.
 - No network access by default.
@@ -43,7 +43,7 @@ Calling a model costs money or time and is not exactly repeatable. Scoring is ch
 Implemented: `niriksha.core.generation` (request, params, usage, success and failure types) and `niriksha.core.provider` (the `Provider` protocol). Not yet implemented at M1.1: any concrete provider, the runner, the store, and provider profiles (the fake provider and runner arrived in M1.2, below).
 
 - `Provider.generate(request)` is synchronous and makes exactly one attempt. It never retries; the runner owns retries and attempt records.
-- Expected provider and transport problems are returned as `GenerationFailure` with one of seven kinds (`timeout`, `rate_limit`, `server_error`, `malformed_response`, `invalid_request`, `unsupported_capability`, `internal_error`). Programming errors are not converted into failures; they raise.
+- Expected provider and transport problems are returned as `GenerationFailure` with one of nine kinds (`timeout`, `rate_limit`, `server_error`, `malformed_response`, `invalid_request`, `unsupported_capability`, `internal_error`, and since M3a `auth_error` and `connection_error`). Programming errors are not converted into failures; they raise.
 - An invalid request raises `pydantic.ValidationError` at construction, so it can never become a recorded attempt.
 - Results carry no timing and no cost. The runner times each call and records it in a separate execution record (M1.2, below). Cost is derived later from usage and a dated price table. Unknown usage stays `None`.
 - Provider metadata is flat and JSON-safe, and keys that look secret-bearing are rejected. Raw provider payloads are not captured yet.
@@ -111,3 +111,9 @@ Implemented: `niriksha.core.scorestore` (the artifact model, strict reading, exc
 - Per-run aggregates reuse `aggregate_records`. The paired summary covers only the cases both runs scored and is prominent when the runs scored different cases. Not-scored cases are never zero and have no delta. Each scorer declares a `DIRECTION`, which the report records; the report is descriptive and names no winner.
 - The paired summary carries a 95% paired percentile bootstrap interval for the mean difference (M2.5): `niriksha.core.bootstrap` (standard library only; 10,000 resamples, seed 0, fixed quantile convention) resamples the existing per-case deltas, never an imputed score, and the interval is unavailable with null endpoints and a reason below 30 paired cases. It reflects resampling of the evaluated cases only, not repeated-generation variability or unseen cases. Comparison reports are version 2.
 - Reports contain no timestamps and no paths. Definitions and limits: [ADR 0007](adr/0007-run-comparison.md) and [ADR 0008](adr/0008-paired-bootstrap-interval.md).
+
+## OpenAI-compatible adapter and retries (implemented in M3a)
+
+`niriksha.providers.openai_compatible` (`OpenAICompatibleProfile`, `OpenAICompatibleProvider`, `HTTP_RETRY_POLICY`) implements the provider protocol over `httpx` for servers that expose `POST {base_url}/chat/completions`. It makes one HTTP request per call, never retries and does not sleep. Unsupported parameters are refused before any request, responses fail closed (nothing repaired, usage never invented), failure messages never copy server text, and the key (read from an environment variable the profile names) appears only in the `Authorization` header. The client ignores proxy and netrc settings from the environment and does not follow redirects.
+
+Retries belong to the runner: `RetryPolicy` (default one attempt) on `run_one`, `run_requests`, `execute_run` and `resume_run`. Only `timeout`, `rate_limit`, `server_error` and `connection_error` are retried, with bounded deterministic backoff and an honoured `Retry-After` up to a limit. A retried result records every attempt in `ExecutionRecord.attempts`; without a policy the record is byte-identical to before. A recorded failure is never retried on resume, and a retry after a timeout can repeat a request the server already processed. The core imports neither the adapter nor `httpx`. Tested only against a local fake server; details and limits: [ADR 0009](adr/0009-openai-compatible-adapter-and-retries.md).
