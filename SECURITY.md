@@ -1,12 +1,12 @@
 # Security
 
-Niriksha is pre-alpha and has no real-provider code yet. These rules apply from the start.
+Niriksha is pre-alpha. It has an OpenAI-compatible HTTP adapter (M3a), but it has only ever been exercised against a local fake server: the tests and CI make no real provider calls, use no real keys and need no credentials. These rules apply from the start.
 
 ## Secret handling
 
 - API keys live only in environment variables or a local `.env` file (gitignored). `.env.example` lists variable names only.
 - Config files store the **name** of the environment variable (for example `api_key_env: GROQ_API_KEY`), never its value.
-- Keys must never be written to logs, run manifests, raw result files or result databases. This will be enforced by tests when the store exists (M1).
+- Keys must never be written to logs, run manifests, raw result files or result databases. The adapter reads a key from the environment variable a profile names, sends it only in the `Authorization` header, never copies server error text into messages (servers can echo keys), and refuses to send a key over plain http to a non-loopback host. Pass the key to `execute_run(secret_values=(...))` so the run store refuses to persist it. Tests check that the key appears in no message, metadata, repr, run file or score file.
 - Never paste a real key into an issue, pull request or test fixture.
 
 ## No network by default

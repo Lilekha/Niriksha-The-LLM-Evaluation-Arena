@@ -1,6 +1,6 @@
 # ADR 0002: Provider contract
 
-Status: accepted. Date: 2026-10-01.
+Status: accepted. Date: 2026-10-01. Note (M3a): `auth_error` and `connection_error` were added and runner-level retries with a recorded attempt history were implemented, as [ADR 0009](0009-openai-compatible-adapter-and-retries.md) describes; the text below is the M1.1 decision record and says "seven" kinds.
 
 ## Context
 The core must stay provider-independent, record every failure honestly, and keep generation separate from scoring.

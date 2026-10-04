@@ -23,7 +23,7 @@ from niriksha.core.dataset import Case, Dataset
 from niriksha.core.generation import GenerationRequest
 from niriksha.core.provenance import SoftwareInfo, collect_software_info
 from niriksha.core.provider import Provider
-from niriksha.core.runner import run_one
+from niriksha.core.runner import NO_RETRY, RetryPolicy, Sleep, run_one
 from niriksha.core.runstore import (
     ManifestDataset,
     ManifestPrompt,
@@ -124,12 +124,14 @@ def _run_pending(
     clock: Clock,
     now: Now,
     secret_values: tuple[str, ...],
+    retry: RetryPolicy,
+    sleep: Sleep,
 ) -> int:
     executed = 0
     for _, request in pairs:
         if request.request_id in done:
             continue
-        record = run_one(provider, request, clock=clock)
+        record = run_one(provider, request, clock=clock, retry=retry, sleep=sleep)
         line = RunResultLine(
             request_id=request.request_id,
             request_sha256=request_sha256(request),
@@ -151,8 +153,13 @@ def execute_run(
     now: Now = _utcnow,
     software: SoftwareInfo | None = None,
     secret_values: tuple[str, ...] = (),
+    retry: RetryPolicy = NO_RETRY,
+    sleep: Sleep = time.sleep,
 ) -> RunSummary:
     """Start a new run. Raises ``FileExistsError`` if ``config.run_id`` already exists.
+
+    ``retry`` is the explicit retry policy (default: one attempt, no retries). It is not recorded in
+    the manifest; each retried result records its own attempts.
 
     Any exception from the provider (a programming error, or a contract violation) propagates and
     leaves the results recorded so far on disk, so the run can be resumed.
@@ -163,7 +170,9 @@ def execute_run(
         config, dataset, provider, pairs, software or collect_software_info(), now()
     )
     run_dir = create_run(runs_dir, manifest, secret_values=secret_values)
-    executed = _run_pending(run_dir, provider, pairs, set(), clock, now, secret_values)
+    executed = _run_pending(
+        run_dir, provider, pairs, set(), clock, now, secret_values, retry, sleep
+    )
     return RunSummary(run_dir, total=len(pairs), already_recorded=0, executed=executed)
 
 
@@ -209,13 +218,16 @@ def resume_run(
     now: Now = _utcnow,
     software: SoftwareInfo | None = None,
     secret_values: tuple[str, ...] = (),
+    retry: RetryPolicy = NO_RETRY,
+    sleep: Sleep = time.sleep,
 ) -> RunSummary:
     """Run the selected cases that have no recorded result yet.
 
     Refuses (``ResumeError``) unless the dataset, selection, prompt, provider, model, parameters and
     software versions all match the stored manifest. Nothing on disk is changed until every check
     has passed; then an incomplete final line (a possible torn write) is truncated, and its case is
-    run again because it has no complete result. Recorded failures are not retried.
+    run again because it has no complete result. Recorded failures are not retried; ``retry``
+    applies only to the cases that are run now.
     """
     check_secret_values(secret_values)
     pairs = build_requests(config, dataset)
@@ -260,5 +272,5 @@ def resume_run(
 
     truncate_torn_tail(run_dir, results.torn_tail_bytes)
     done = {line.request_id for line in results.lines}
-    executed = _run_pending(run_dir, provider, pairs, done, clock, now, secret_values)
+    executed = _run_pending(run_dir, provider, pairs, done, clock, now, secret_values, retry, sleep)
     return RunSummary(run_dir, total=len(pairs), already_recorded=len(done), executed=executed)

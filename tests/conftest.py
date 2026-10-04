@@ -2,6 +2,8 @@ import socket
 
 import pytest
 
+from http_support import blackhole, loopback_only, server  # noqa: F401  (opt-in fixtures)
+
 
 @pytest.fixture(autouse=True)
 def _no_network(monkeypatch):

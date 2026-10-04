@@ -161,7 +161,7 @@ def test_bad_result_payloads_rejected(payload):
         result_adapter.validate_json(payload)
 
 
-def test_failure_kinds_are_exactly_the_approved_seven():
+def test_failure_kinds_are_exactly_the_approved_nine():
     assert {k.value for k in FailureKind} == {
         "timeout",
         "rate_limit",
@@ -170,6 +170,8 @@ def test_failure_kinds_are_exactly_the_approved_seven():
         "invalid_request",
         "unsupported_capability",
         "internal_error",
+        "auth_error",
+        "connection_error",
     }
 
 
