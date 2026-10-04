@@ -18,6 +18,8 @@ M2.4 compares two completed runs on one metric from their verified score artifac
 
 M2.5 adds a 95% paired bootstrap interval for the mean paired difference to a comparison, computed with the standard library only from the cases both runs scored (never an imputed score) and unavailable below 30 paired cases. It reflects resampling of the evaluated cases, not repeated-generation variability or unseen cases, and is not a significance test ([ADR 0008](docs/adr/0008-paired-bootstrap-interval.md)).
 
+M3b stage B adds a manual live smoke harness (`scripts/live_smoke.py`: at most 8 requests, one attempt each, synthetic fixtures only) and the provider research behind it. **No live request has been made, and no provider is confirmed**: Groq is only a conditional candidate, with items that can be checked only in an account still unverified ([record](docs/provider-validation.md), [ADR 0010](docs/adr/0010-real-provider-validation.md)).
+
 M3a adds an OpenAI-compatible chat-completions adapter (`niriksha.providers.openai_compatible`, with `httpx`) and opt-in, bounded runner-level retries that record every attempt. It is tested only against a local fake HTTP server: no real provider, key or network is used, and it has not been run against any real service ([ADR 0009](docs/adr/0009-openai-compatible-adapter-and-retries.md), [profile setup](configs/README.md)).
 
 M2.2 persists scores as separate, verifiable artifacts (one metric per run), aggregates them per artifact (mean over scored cases only; failed generations are counted as not scored and never as zero) and renders deterministic reports, all offline ([ADR 0005](docs/adr/0005-score-artifacts-and-reports.md), [usage guide](docs/scoring-guide.md)). Integrity hashes detect corruption and drift; they do not authenticate.
@@ -54,7 +56,7 @@ An independent evaluation core (runner, provider protocol, storage, manifests, s
 | M0 | Repository foundations and documentation (no evaluation code) | complete |
 | M1 | Schemas, dataset loader, fake provider, runner, store, manifest, resume | implemented offline with the fake provider only (M1.1 to M1.3), integration-tested and reviewed in M1.4 (open limitations are listed in ADR 0003) |
 | M2 | Deterministic scorers, persisted scores and reports, JSON Schema validity, confidence intervals | in progress (M2.1 scorers, M2.2 score artifacts and reports and M2.3 JSON Schema validity done; M2.4 two-run comparison done; M2.5 paired bootstrap interval implemented, pending review; significance testing later) |
-| M3 | OpenAI-compatible adapter (tested locally first), then opt-in real and local-model runs | in progress (M3a adapter and retries implemented against a local fake server, pending review; real and local-model runs not started) |
+| M3 | OpenAI-compatible adapter (tested locally first), then opt-in real and local-model runs | in progress (M3a adapter and retries done, tested only against a local fake server; M3b smoke harness and provider research built, no live request made and no provider confirmed; real and local-model runs not started) |
 | M4 | English dataset v0.1, then Hindi and Kannada cases | planned |
 | M5 | Reports, paired comparisons, first honest write-up | planned |
 
