@@ -9,12 +9,15 @@ What it does, and does not:
 
 - Sends only the two synthetic test fixtures (``tiny_qa``, ``tiny_extraction``): at most 8 requests,
   one attempt each (``NO_RETRY``: a failure costs one request and is never repeated), temperature 0,
-  ``max_tokens`` 32 for QA and 128 for extraction, at least 3 s between requests. None of these
-  caps can be raised from the environment. There is no dataset parameter: only the fixtures run.
+  ``max_tokens`` 32 for QA and 128 for extraction, at least 3 s between requests. Only the QA
+  token cap can be changed from the environment (``NIRIKSHA_SMOKE_QA_MAX_TOKENS``, 1 to 256);
+  the request count, spacing, retries and extraction cap cannot. There is no dataset parameter:
+  only the fixtures run.
 - Reads the endpoint, model and the NAME of the variable that holds the key from environment
   variables (it does not load ``.env``): ``NIRIKSHA_SMOKE_BASE_URL``, ``NIRIKSHA_SMOKE_MODEL``,
   ``NIRIKSHA_SMOKE_KEY_VARIABLE`` (omit for a server that needs no key), and optionally
   ``NIRIKSHA_SMOKE_MAX_TOKENS_FIELD`` (``max_tokens`` or ``max_completion_tokens``),
+  ``NIRIKSHA_SMOKE_QA_MAX_TOKENS`` (default 32, at most 256),
   ``NIRIKSHA_SMOKE_TIMEOUT_S`` (up to 300) and ``NIRIKSHA_SMOKE_TASKS`` (``qa``, ``extraction``;
   both by default; choosing fewer only reduces the number of requests).
 - Requires https for a remote host (plain http only for loopback, e.g. a local Ollama).
@@ -39,7 +42,7 @@ import sys
 import time
 from collections import Counter
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -71,6 +74,8 @@ ENV_KEY_VARIABLE = "NIRIKSHA_SMOKE_KEY_VARIABLE"
 ENV_MAX_TOKENS_FIELD = "NIRIKSHA_SMOKE_MAX_TOKENS_FIELD"
 ENV_TIMEOUT = "NIRIKSHA_SMOKE_TIMEOUT_S"
 ENV_TASKS = "NIRIKSHA_SMOKE_TASKS"
+ENV_QA_MAX_TOKENS = "NIRIKSHA_SMOKE_QA_MAX_TOKENS"
+MAX_QA_MAX_TOKENS = 256  # twice the extraction cap; bounds the worst case at 5 x 256 tokens
 _SAFE_TOKEN = re.compile(r"^[a-z_]{1,32}$")
 
 
@@ -183,6 +188,14 @@ def settings_from_env(environ: Mapping[str, str]) -> SmokeSettings:
         tasks = tuple(task for task in TASKS if task.label in wanted)
     else:
         raise SmokeError(f"{ENV_TASKS} must be a comma-separated subset of: {', '.join(labels)}")
+    qa_text = environ.get(ENV_QA_MAX_TOKENS)
+    if qa_text is not None:
+        qa_text = qa_text.strip()
+        if not (re.fullmatch(r"[0-9]+", qa_text) and 1 <= int(qa_text) <= MAX_QA_MAX_TOKENS):
+            raise SmokeError(
+                f"{ENV_QA_MAX_TOKENS} must be an integer from 1 to {MAX_QA_MAX_TOKENS}"
+            )
+        tasks = tuple(replace(t, max_tokens=int(qa_text)) if t.label == "qa" else t for t in tasks)
     settings = SmokeSettings(base_url, model, key_variable, field_name, timeout_s, tasks)
     if _host(base_url) not in LOOPBACK_HOSTS and not base_url.lower().startswith("https://"):
         raise SmokeError("a remote endpoint must use https (plain http is only for loopback)")

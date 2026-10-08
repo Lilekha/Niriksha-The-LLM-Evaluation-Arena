@@ -100,6 +100,44 @@ def test_invalid_settings_are_refused_naming_the_variable(changes, mentions):
         smoke.settings_from_env(env(**changes))
 
 
+def caps(settings):
+    return {t.label: t.max_tokens for t in settings.tasks}
+
+
+def test_the_qa_token_cap_defaults_to_32_and_extraction_stays_128():
+    assert caps(smoke.settings_from_env(env())) == {"qa": 32, "extraction": 128}
+
+
+@pytest.mark.parametrize(("value", "qa"), [("128", 128), (" 64 ", 64), ("1", 1), ("256", 256)])
+def test_the_qa_token_cap_can_be_overridden_within_bounds(value, qa):
+    settings = smoke.settings_from_env(env(**{smoke.ENV_QA_MAX_TOKENS: value}))
+    assert caps(settings) == {"qa": qa, "extraction": 128}
+    assert [t.max_tokens for t in smoke.TASKS] == [32, 128]  # the module defaults are untouched
+
+
+@pytest.mark.parametrize(
+    "value", ["", " ", "abc", "12.5", "1e2", "0", "-5", "+5", "1_28", "257", "100000", "١٢٨"]
+)
+def test_invalid_qa_token_caps_are_refused_naming_the_variable(value):
+    with pytest.raises(smoke.SmokeError, match=smoke.ENV_QA_MAX_TOKENS):
+        smoke.settings_from_env(env(**{smoke.ENV_QA_MAX_TOKENS: value}))
+
+
+def test_the_override_is_in_the_plan_and_changes_nothing_else():
+    plan = smoke.build_plan(
+        smoke.settings_from_env(env(**{smoke.ENV_QA_MAX_TOKENS: "128"})), lambda: NOW
+    )
+    text = "\n".join(smoke.describe_plan(plan))
+    assert "128 (qa), 128 (extraction)" in text and "8 in total" in text and KEY not in text
+    assert plan.total_requests == 8
+    smoke.confirm(plan, lambda prompt: "8")
+    with pytest.raises(smoke.SmokeError, match="no request was sent"):
+        smoke.confirm(plan, lambda prompt: "7")
+    default_plan = smoke.build_plan(smoke.settings_from_env(env()), lambda: NOW)
+    default = "\n".join(smoke.describe_plan(default_plan))
+    assert "32 (qa), 128 (extraction)" in default
+
+
 @pytest.mark.parametrize(
     "url",
     [
@@ -260,6 +298,16 @@ def test_a_full_run_sends_exactly_eight_single_attempt_requests_and_leaks_nothin
                 assert KEY.encode() not in path.read_bytes(), path.name
     assert len(list((tmp_path / "scores").iterdir())) == 4  # 1 metric for QA, 3 for extraction
     assert all("Authorization" not in line for line in lines)
+
+
+def test_the_override_reaches_only_qa_requests_and_the_budget_stays_eight(server, tmp_path):
+    server.enqueue(*replies_for_a_full_run())
+    lines = []
+    assert run_main(server, tmp_path, lines, **{smoke.ENV_QA_MAX_TOKENS: "128"}) == 0
+    assert [r.json()["max_tokens"] for r in server.requests] == [128] * 8
+    printed = "\n".join(lines)
+    assert len(server.requests) == 8 and "requests made: 8" in printed
+    assert "128 (qa), 128 (extraction)" in printed
 
 
 def test_failures_are_recorded_once_never_retried(server, tmp_path):
