@@ -291,6 +291,21 @@ def test_failures_are_recorded_once_never_retried(server, tmp_path):
     assert kinds[:2] == ["rate_limit", "server_error"]
 
 
+def test_the_summary_counts_empty_successes_and_not_failures(server, tmp_path):
+    answers = replies_for_a_full_run()
+    answers[0] = Reply(200, completion("", finish_reason="length"))
+    answers[1] = Reply(200, completion("", finish_reason="length"))
+    answers[2] = Reply(500, "boom")  # a failure is not an empty success
+    answers[5] = Reply(200, completion(""))  # extraction run: one empty success
+    server.enqueue(*answers)
+    lines = []
+    assert run_main(server, tmp_path, lines) == 0
+    printed = "\n".join(lines)
+    assert printed.count("empty outputs: 2 of 4 ok") == 1  # QA: 2 empty, 2 non-empty, 1 failed
+    assert printed.count("empty outputs: 1 of 3 ok") == 1  # extraction
+    assert MODEL_TEXT not in printed and KEY not in printed
+
+
 def test_choosing_one_task_sends_only_its_requests(server, tmp_path):
     server.enqueue(*replies_for_a_full_run()[5:])
     code = smoke.main(

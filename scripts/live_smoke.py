@@ -321,6 +321,7 @@ class RunStats:
     task: str
     cases: int
     ok: int = 0
+    empty_outputs: int = 0  # successes whose output_text is exactly "" (failures never count)
     failed: Counter = field(default_factory=Counter)  # failure kind -> count
     returned_models: set[str] = field(default_factory=set)
     finish_reasons: Counter = field(default_factory=Counter)
@@ -357,6 +358,8 @@ def _collect(run_dir: Path, stats: RunStats) -> None:
         stats.elapsed_s.append(line.execution.elapsed_s)
         if isinstance(result, GenerationSuccess):
             stats.ok += 1
+            if result.output_text == "":
+                stats.empty_outputs += 1
             if result.returned_model:
                 stats.returned_models.add(result.returned_model)
             reason = result.finish_reason
@@ -426,6 +429,7 @@ def format_summary(summary: SmokeSummary) -> list[str]:
         lines.append(f"run {stats.run_id} ({stats.task}, {stats.cases} cases)")
         failed = ", ".join(f"{kind} {n}" for kind, n in sorted(stats.failed.items())) or "none"
         lines.append(f"  results: {stats.ok} ok; failed: {failed}")
+        lines.append(f"  empty outputs: {stats.empty_outputs} of {stats.ok} ok")
         if stats.elapsed_s:
             lines.append(
                 f"  latency s: min {min(stats.elapsed_s):.2f}, "

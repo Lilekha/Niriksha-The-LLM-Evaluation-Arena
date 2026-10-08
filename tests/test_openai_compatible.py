@@ -153,6 +153,38 @@ def test_content_is_kept_exactly_and_finish_reason_is_raw(server, make, text, fi
     assert result.output_text == text and result.finish_reason == finish
 
 
+def test_empty_content_cut_off_at_the_token_cap_is_a_valid_success(server, make):
+    # Observed in the first live smoke test: content "", finish_reason "length", usage at the cap.
+    usage = {"prompt_tokens": 20, "completion_tokens": 32, "total_tokens": 52}
+    server.enqueue(Reply(200, completion("", finish_reason="length", usage=usage)))
+    result = make().generate(make_request(max_tokens=32))
+    assert isinstance(result, GenerationSuccess)  # not a MALFORMED_RESPONSE failure
+    assert result.output_text == "" and result.finish_reason == "length"
+    assert result.usage == Usage(
+        prompt_tokens=20, completion_tokens=32, total_tokens=52, source="reported"
+    )
+
+
+def test_reasoning_fields_are_ignored_and_only_visible_content_is_kept(server, make):
+    document = completion(
+        "Paris",
+        usage={
+            "prompt_tokens": 5,
+            "completion_tokens": 9,
+            "total_tokens": 14,
+            "completion_tokens_details": {"reasoning_tokens": 7},
+        },
+    )
+    document["choices"][0]["message"]["reasoning"] = "hidden chain of thought"
+    server.enqueue(Reply(200, document))
+    result = make().generate(make_request())
+    assert isinstance(result, GenerationSuccess)
+    assert result.output_text == "Paris" and "hidden" not in result.model_dump_json()
+    assert result.usage == Usage(
+        prompt_tokens=5, completion_tokens=9, total_tokens=14, source="reported"
+    )
+
+
 @pytest.mark.parametrize(
     ("document", "model"),
     [
